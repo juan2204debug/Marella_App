@@ -1,0 +1,1274 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+  <title>Marella · Order Intelligence</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;0,700;1,400&family=Syne:wght@400;600;700;800&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; background: #F0EDE6; }
+    #root { min-height: 100%; }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+
+<!-- SheetJS para Excel -->
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<!-- Firebase -->
+<script type="module">
+  import { initializeApp }                              from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import { getFirestore, collection, doc, setDoc,
+           onSnapshot, deleteDoc, query, orderBy }      from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey:            "AIzaSyDnCQ2xtMRzB333mWcIKC-fncn1tvoEfQg",
+    authDomain:        "marella-35fd7.firebaseapp.com",
+    projectId:         "marella-35fd7",
+    storageBucket:     "marella-35fd7.firebasestorage.app",
+    messagingSenderId: "715738504980",
+    appId:             "1:715738504980:web:ad654e7795aac6e782ec01"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db  = getFirestore(app);
+
+  /* ── API pública que usa React ── */
+  window.DB = {
+    /* Pedidos */
+    savePedido:   async (p)   => { await setDoc(doc(db,"pedidos",   p.id), p); },
+    deletePedido: async (id)  => { await deleteDoc(doc(db,"pedidos", id)); },
+    onPedidos:    (cb)        => onSnapshot(query(collection(db,"pedidos"),   orderBy("ts","desc")), s => cb(s.docs.map(d=>d.data()))),
+
+    /* Comprobantes */
+    saveComp:     async (c)   => { await setDoc(doc(db,"comprobantes", c.id), c); },
+    onComps:      (cb)        => onSnapshot(query(collection(db,"comprobantes"), orderBy("ts","desc")), s => cb(s.docs.map(d=>d.data()))),
+
+    /* Menú */
+    saveMenu:     async (m)   => { await setDoc(doc(db,"config","menu"), { data: JSON.stringify(m) }); },
+    onMenu:       (cb)        => onSnapshot(doc(db,"config","menu"), s => { if(s.exists()) cb(JSON.parse(s.data().data)); }),
+  };
+  window.DB_READY = true;
+  window.dispatchEvent(new Event("db-ready"));
+</script>
+
+<!-- React + Babel -->
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin></script>
+
+<script type="text/babel">
+const { useState, useEffect, useRef, useMemo, useCallback } = React;
+
+/* ═══════════════════════════════════════════════════════════
+   MARELLA · Order Intelligence  v2.3.0  — Firebase realtime
+═══════════════════════════════════════════════════════════ */
+const VER    = "2.3.0";
+const BUILD  = "20250528";
+const TENANT = "Marella Cevichería";
+
+/* ── Design tokens ── */
+const D = {
+  canvas:"#F0EDE6", bg3:"#EDE9E1", bg4:"#F5F2EC",
+  ln0:"#00000008", ln1:"#0000001A", ln2:"#00000028",
+  nb1:"#0A1F38", nb2:"#174A82", nb3:"#1E5490", nb4:"#2E7FC2",
+  ga:"#8A6820", gb:"#C9A84C", gc:"#E2C97E", gd:"#C9A84C18",
+  ca:"#0369A1", cb:"#E0F2FE",
+  amber:"#D97706", amberD:"#D9770612",
+  blue:"#2563EB",  blueD:"#2563EB12",
+  green:"#059669", greenD:"#05966912",
+  red:"#DC2626",   redD:"#DC262612",
+  t0:"#1A1824", t1:"#4A4560", t2:"#8A879E", t3:"#C4C1D2",
+  serif:"'Cormorant Garamond','Didot',Georgia,serif",
+  sans:"'DM Sans','Helvetica Neue',sans-serif",
+  display:"'Syne','DM Sans',sans-serif",
+  mono:"'JetBrains Mono','Courier New',monospace",
+};
+
+/* ── Menú default ── */
+const MENU_DEFAULT = {
+  "Ceviches":[
+    {id:"cv1",nombre:"Ceviche Clásico",emoji:"🐟",precio:38},
+    {id:"cv2",nombre:"Ceviche Mixto",emoji:"🦐",precio:45},
+    {id:"cv3",nombre:"Conchas Negras",emoji:"🐚",precio:52},
+    {id:"cv4",nombre:"Tiradito de Lenguado",emoji:"🐠",precio:42},
+    {id:"cv5",nombre:"Leche de Tigre",emoji:"🥛",precio:22},
+  ],
+  "Arroces & Fondos":[
+    {id:"ar1",nombre:"Arroz con Mariscos",emoji:"🦞",precio:48},
+    {id:"ar2",nombre:"Chaufa de Mariscos",emoji:"🍳",precio:42},
+    {id:"ar3",nombre:"Sudado de Pescado",emoji:"🍲",precio:44},
+    {id:"ar4",nombre:"Parihuela",emoji:"🥘",precio:55},
+  ],
+  "Entradas":[
+    {id:"en1",nombre:"Causa Rellena",emoji:"🥗",precio:28},
+    {id:"en2",nombre:"Pulpo al Olivo",emoji:"🐙",precio:48},
+    {id:"en3",nombre:"Choros a la Chalaca",emoji:"🦪",precio:32},
+  ],
+  "Bebidas":[
+    {id:"be1",nombre:"Chicha Morada",emoji:"🫙",precio:12},
+    {id:"be2",nombre:"Maracuyá Frozen",emoji:"🍹",precio:15},
+    {id:"be3",nombre:"Agua Mineral",emoji:"💧",precio:8},
+    {id:"be4",nombre:"Cerveza",emoji:"🍺",precio:14},
+    {id:"be5",nombre:"Pisco Sour",emoji:"🍸",precio:22},
+  ],
+};
+
+const MODS = [
+  {id:"sp",label:"Sin picante",icon:"🌶️"},
+  {id:"xl",label:"Extra limón",icon:"🍋"},
+  {id:"sc",label:"Sin cebolla",icon:"🧅"},
+  {id:"sf",label:"Sin cilantro",icon:"🌿"},
+  {id:"ps",label:"Poco sal",icon:"🧂"},
+  {id:"et",label:"Extra leche tigre",icon:"🥛"},
+  {id:"sa",label:"Sin ají amarillo",icon:"🫑"},
+  {id:"pk",label:"Para llevar",icon:"📦"},
+  {id:"sg",label:"Sin mariscos",icon:"🚫"},
+  {id:"al",label:"Alergia mariscos",icon:"⚠️"},
+];
+
+const ESTADOS = {
+  pendiente: {label:"Pendiente", eng:"NEW",    color:D.amber, dim:D.amberD, next:"preparando"},
+  preparando:{label:"Preparando",eng:"COOKING",color:D.blue,  dim:D.blueD,  next:"listo"},
+  listo:     {label:"Listo",     eng:"READY",  color:D.green, dim:D.greenD, next:null},
+};
+
+const ROLES = {
+  waiter: {label:"Mozo",         sub:"Gestión de pedidos", icon:"🤵"},
+  kitchen:{label:"Cocina",       sub:"Estación de cocina", icon:"👨‍🍳"},
+  manager:{label:"Administrador",sub:"Acceso completo",    icon:"◈"},
+};
+
+/* ── Utils ── */
+const IGV = 0.18;
+const gid = () => Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+const fmt = n  => `S/ ${Number(n).toFixed(2)}`;
+const pad = n  => String(n).padStart(2,"0");
+const nowStr = () => new Date().toLocaleString("es-PE",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:false});
+const tsD = ts => new Date(ts).toLocaleDateString("es-PE",{day:"2-digit",month:"2-digit",year:"numeric"});
+const tsH = ts => new Date(ts).toLocaleTimeString("es-PE",{hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:false});
+const isoD = ts => new Date(ts).toISOString().slice(0,10);
+const ela  = ts => { const s=Math.floor((Date.now()-ts)/1000),m=Math.floor(s/60),h=Math.floor(m/60); return h>0?`${pad(h)}:${pad(m%60)}:${pad(s%60)}`:`${pad(m)}:${pad(s%60)}`; };
+const tots = items => { const t=+items.reduce((s,i)=>s+i.precio,0).toFixed(2),b=+(t/(1+IGV)).toFixed(2); return {base:b,igv:+(t-b).toFixed(2),total:t}; };
+
+/* ── KPIs ── */
+function computeKPIs(pedidos, comps) {
+  const hoy0 = new Date(); hoy0.setHours(0,0,0,0);
+  const hoyTs = hoy0.getTime();
+  const cerrados  = pedidos.filter(p=>p.cerrado&&p.ts>=hoyTs);
+  const todosHoy  = pedidos.filter(p=>p.ts>=hoyTs);
+  const abiertos  = pedidos.filter(p=>!p.cerrado&&p.ts>=hoyTs);
+
+  const tiempos   = cerrados.filter(p=>p.tsListo).map(p=>Math.floor((p.tsListo-p.ts)/60000));
+  const avgTiempo = tiempos.length ? +(tiempos.reduce((a,b)=>a+b,0)/tiempos.length).toFixed(1) : null;
+
+  const sinMods     = todosHoy.filter(p=>p.items.every(i=>i.mods.length===0)).length;
+  const tasaSinMods = todosHoy.length ? Math.round((sinMods/todosHoy.length)*100) : 100;
+
+  const compHoy   = comps.filter(c=>c.ts>=hoyTs);
+  const ventaHoy  = compHoy.reduce((s,c)=>s+c.total,0);
+  const ticketProm= compHoy.length ? +(ventaHoy/compHoy.length).toFixed(2) : 0;
+
+  const conteo = {};
+  pedidos.forEach(p=>p.items.forEach(it=>{
+    if(!conteo[it.plato.nombre]) conteo[it.plato.nombre]={nombre:it.plato.nombre,emoji:it.plato.emoji,n:0,rev:0};
+    conteo[it.plato.nombre].n++; conteo[it.plato.nombre].rev+=it.precio;
+  }));
+  const topPlatos = Object.values(conteo).sort((a,b)=>b.n-a.n).slice(0,5);
+  const maxN = topPlatos.length ? topPlatos[0].n : 1;
+
+  const porHora = Array(24).fill(0);
+  todosHoy.forEach(p=>{porHora[new Date(p.ts).getHours()]++;});
+
+  const lentos = abiertos.filter(p=>p.estado==="pendiente"&&(Date.now()-p.ts)>15*60000).length;
+
+  const ayer0 = new Date(hoy0); ayer0.setDate(ayer0.getDate()-1);
+  const compAyer  = comps.filter(c=>c.ts>=ayer0.getTime()&&c.ts<hoyTs);
+  const ventaAyer = compAyer.reduce((s,c)=>s+c.total,0);
+  const deltaVenta= ventaAyer>0 ? +(((ventaHoy-ventaAyer)/ventaAyer)*100).toFixed(1) : null;
+
+  return {avgTiempo,tasaSinMods,ventaHoy,ticketProm,topPlatos,maxN,porHora,lentos,
+    pedidosHoy:todosHoy.length,compHoy:compHoy.length,deltaVenta};
+}
+
+/* ── Excel ── */
+function xlsxExport(pedidos,comps,d1,d2){
+  try{
+    const wb=XLSX.utils.book_new();
+    const r1=[];
+    pedidos.filter(p=>p.ts>=d1&&p.ts<=d2).sort((a,b)=>a.ts-b.ts).forEach(p=>{
+      const {base,igv,total}=tots(p.items);
+      p.items.forEach((it,idx)=>{
+        const ms=it.mods.map(m=>MODS.find(x=>x.id===m)?.label||m).join(" | ");
+        const comp=p.compId?comps.find(c=>c.id===p.compId):null;
+        r1.push({"Fecha":tsD(p.ts),"Hora":tsH(p.ts),"Pedido ID":p.id,"Mesa":p.mesa,
+          "Estado":ESTADOS[p.estado]?.label||p.estado,"Cerrado":p.cerrado?"Sí":"No",
+          "# Item":idx+1,"Plato":it.plato.nombre,"Precio (S/)":it.precio,
+          "Modificaciones":ms,"Nota":it.nota||"",
+          "Op. Gravada(S/)":idx===0?base:"","IGV 18%(S/)":idx===0?igv:"","Total(S/)":idx===0?total:"",
+          "Comprobante":idx===0&&comp?comp.numero:""});
+      });
+    });
+    const ws1=XLSX.utils.json_to_sheet(r1.length?r1:[{"Sin datos":"—"}]);
+    ws1["!cols"]=[{wch:12},{wch:10},{wch:16},{wch:10},{wch:12},{wch:8},{wch:7},{wch:26},{wch:12},{wch:32},{wch:22},{wch:15},{wch:13},{wch:12},{wch:20}];
+    XLSX.utils.book_append_sheet(wb,ws1,"Pedidos");
+    const r2=comps.filter(c=>c.ts>=d1&&c.ts<=d2).sort((a,b)=>a.ts-b.ts).map(c=>({
+      "Fecha":tsD(c.ts),"Hora":tsH(c.ts),"N° Comprobante":c.numero,"Tipo":c.tipo==="boleta"?"Boleta":"Factura",
+      "Mesa":c.mesa,"RUC":c.ruc||"","Razón Social":c.razon||"","Dirección":c.dir||"",
+      "Op. Gravada(S/)":c.base,"IGV 18%(S/)":c.igv,"Total(S/)":c.total}));
+    const ws2=XLSX.utils.json_to_sheet(r2.length?r2:[{"Sin datos":"—"}]);
+    ws2["!cols"]=[{wch:12},{wch:10},{wch:20},{wch:10},{wch:10},{wch:14},{wch:28},{wch:28},{wch:16},{wch:14},{wch:12}];
+    XLSX.utils.book_append_sheet(wb,ws2,"Comprobantes");
+    const byD={};
+    pedidos.filter(p=>p.ts>=d1&&p.ts<=d2).forEach(p=>{
+      const k=tsD(p.ts);
+      if(!byD[k]) byD[k]={Fecha:k,Pedidos:0,Platos:0,Boletas:0,Facturas:0,"Venta(S/)":0};
+      byD[k].Pedidos++;byD[k].Platos+=p.items.length;byD[k]["Venta(S/)"]+=tots(p.items).total;
+      if(p.compId){const c=comps.find(x=>x.id===p.compId);if(c)c.tipo==="boleta"?byD[k].Boletas++:byD[k].Facturas++;}
+    });
+    const ws3=XLSX.utils.json_to_sheet(Object.values(byD).length?Object.values(byD).map(d=>({...d,"Venta(S/)":+d["Venta(S/)"].toFixed(2)})):[{"Sin datos":"—"}]);
+    ws3["!cols"]=[{wch:14},{wch:10},{wch:10},{wch:10},{wch:10},{wch:16}];
+    XLSX.utils.book_append_sheet(wb,ws3,"Resumen Diario");
+    const b64=XLSX.write(wb,{bookType:"xlsx",type:"base64"});
+    const a=document.createElement("a");
+    a.href=`data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${b64}`;
+    a.download=`Marella_${isoD(d1)}_${isoD(d2)}.xlsx`;
+    document.body.appendChild(a);a.click();
+    setTimeout(()=>document.body.removeChild(a),500);
+    return true;
+  }catch(e){console.error(e);return false;}
+}
+
+/* ── Print ── */
+function printDoc(comp){
+  const lines=comp.items.map(it=>`<tr><td>${it.plato.emoji} ${it.plato.nombre}${it.mods?.length?`<div class="m">${it.mods.map(m=>MODS.find(x=>x.id===m)?.label||m).join(" · ")}</div>`:""}</td><td class="r">S/ ${it.precio.toFixed(2)}</td></tr>`).join("");
+  const w=window.open("","_blank","width=400,height=660");
+  if(!w) return;
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${comp.numero}</title>
+  <style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:'DM Sans',sans-serif;width:300px;margin:0 auto;padding:20px}
+  .h{text-align:center;padding-bottom:12px;border-bottom:2px dashed #E0DDD6;margin-bottom:12px}
+  .sys{font-size:8px;letter-spacing:3px;color:#C4C1D2;text-transform:uppercase}
+  .ten{font-size:17px;font-weight:700;color:#1A1824;margin:4px 0}
+  .badge{display:inline-block;background:#F0F9FF;border:1px solid #BAE6FD;color:#0369A1;font-size:8px;font-weight:700;letter-spacing:2px;padding:2px 12px;border-radius:20px;text-transform:uppercase}
+  .num{font-weight:700;font-size:14px;color:#1A1824;margin:6px 0 2px}.date{font-size:10px;color:#C4C1D2}
+  .mesa{font-size:11px;color:#8A879E;margin:8px 0 10px}
+  table{width:100%;border-collapse:collapse}td{padding:5px 0;vertical-align:top;font-size:12px}
+  .r{text-align:right;font-weight:600;padding-left:8px;white-space:nowrap}.m{font-size:9px;color:#C4C1D2;margin-top:2px}
+  hr{border:none;border-top:2px dashed #E0DDD6;margin:10px 0}
+  .sub{font-size:11px;color:#8A879E}.tot{font-size:16px;font-weight:800;color:#1A1824}.gold{color:#8A6820}
+  .foot{text-align:center;font-size:9px;color:#C4C1D2;margin-top:14px;line-height:1.8}
+  @media print{body{width:100%}}</style></head><body>
+  <div class="h"><div class="sys">Powered by Marea Systems</div><div class="ten">${TENANT}</div>
+  <div class="badge">${comp.tipo==="boleta"?"Boleta de Venta":"Factura Electrónica"}</div>
+  <div class="num">${comp.numero}</div><div class="date">${comp.fecha}</div></div>
+  ${comp.ruc?`<div style="background:#F5F2EC;border-radius:6px;padding:9px;margin-bottom:10px;font-size:11px;line-height:1.9;color:#4A4560"><b>RUC:</b> ${comp.ruc}<br><b>Razón:</b> ${comp.razon}<br><b>Dir:</b> ${comp.dir}</div>`:""}
+  <div class="mesa">${comp.mesa}</div><table>${lines}
+  <tr><td colspan="2"><hr></td></tr>
+  <tr><td class="sub">Operación gravada</td><td class="r sub">S/ ${comp.base.toFixed(2)}</td></tr>
+  <tr><td class="sub">IGV (18%)</td><td class="r sub">S/ ${comp.igv.toFixed(2)}</td></tr>
+  <tr><td colspan="2"><hr></td></tr>
+  <tr><td class="tot">TOTAL</td><td class="r tot gold">S/ ${comp.total.toFixed(2)}</td></tr>
+  </table><div class="foot">Gracias por su visita · ${TENANT}<br>MAREA v${VER} · ${BUILD}</div>
+  <script>window.onload=()=>{window.print();window.onafterprint=()=>window.close()}<\/script>
+  </body></html>`);
+  w.document.close();
+}
+
+/* ════════════════════════════════════════════════════════════
+   COMPONENTES ATÓMICOS
+════════════════════════════════════════════════════════════ */
+function Logo({size=28}){
+  return(
+    <svg width={size} height={size} viewBox="0 0 40 40" fill="none">
+      <path d="M3,24 C8,16 13,28 20,22 C27,16 32,28 37,22" stroke={D.gb} strokeWidth="2.2" strokeLinecap="round" fill="none"/>
+      <path d="M5,30 C10,23 14,34 20,28 C26,22 30,32 35,27" stroke={D.gb} strokeWidth="1.2" strokeLinecap="round" fill="none" opacity=".4"/>
+      <circle cx="20" cy="11" r="4.5" fill={D.gb} opacity=".9"/>
+      <line x1="20" y1="6.5" x2="20" y2="2" stroke={D.gb} strokeWidth="1.5" strokeLinecap="round"/>
+      <path d="M30,16 C33,11 39,13 38,18 C37,22 32,20 30,16Z" fill={D.gb} opacity=".8"/>
+    </svg>
+  );
+}
+
+function Timer({ts,color}){
+  const [t,setT]=useState(ela(ts));
+  useEffect(()=>{const iv=setInterval(()=>setT(ela(ts)),1000);return()=>clearInterval(iv);},[ts]);
+  return <span style={{fontFamily:D.mono,fontSize:11,color:color||D.t2,letterSpacing:.5}}>{t}</span>;
+}
+
+function Badge({estado,sm}){
+  const e=ESTADOS[estado];
+  return(
+    <span style={{display:"inline-flex",alignItems:"center",gap:5,
+      padding:sm?"2px 8px":"3px 11px",borderRadius:20,
+      background:e.dim,border:`1px solid ${e.color}33`,color:e.color,
+      fontSize:sm?9:10,fontWeight:700,letterSpacing:.5,fontFamily:D.sans}}>
+      <span style={{width:sm?5:6,height:sm?5:6,borderRadius:"50%",background:e.color,display:"inline-block"}}/>
+      {e.eng}
+    </span>
+  );
+}
+
+function Btn({children,onClick,variant="gold",full,disabled,style:sx={}}){
+  const v={
+    gold:{bg:`linear-gradient(135deg,${D.gb},${D.ga})`,color:"#111",border:"none",shadow:"0 3px 12px rgba(201,168,76,.28)"},
+    navy:{bg:D.nb1,color:"#F0F4FF",border:"none",shadow:"0 3px 10px rgba(10,31,56,.22)"},
+    ghost:{bg:"#FFFFFF",color:D.t2,border:`1px solid ${D.ln1}`,shadow:"0 1px 3px rgba(0,0,0,.05)"},
+  }[variant]||{};
+  return(
+    <button disabled={disabled} onClick={onClick} style={{
+      width:full?"100%":"auto",padding:"11px 20px",
+      borderRadius:10,cursor:disabled?"not-allowed":"pointer",
+      background:v.bg,color:v.color,border:v.border,
+      fontFamily:D.sans,fontWeight:700,fontSize:13,letterSpacing:.3,
+      boxShadow:v.shadow,transition:"all .18s",opacity:disabled?.45:1,...sx,
+    }}
+      onMouseEnter={e=>{if(!disabled){e.currentTarget.style.filter="brightness(1.08)";e.currentTarget.style.transform="translateY(-1px)";}}}
+      onMouseLeave={e=>{e.currentTarget.style.filter="";e.currentTarget.style.transform="";}}
+    >{children}</button>
+  );
+}
+
+function Input({label,value,onChange,type="text",placeholder=""}){
+  return(
+    <div style={{marginBottom:12}}>
+      {label&&<div style={{color:D.t2,fontSize:9,letterSpacing:1.5,textTransform:"uppercase",marginBottom:5,fontFamily:D.sans,fontWeight:500}}>{label}</div>}
+      <input type={type} value={value} onChange={onChange} placeholder={placeholder} style={{
+        width:"100%",padding:"10px 13px",borderRadius:9,
+        border:`1px solid ${D.ln1}`,background:"#FFFFFF",
+        color:D.t0,fontSize:13,outline:"none",fontFamily:D.sans,
+        boxShadow:"inset 0 1px 2px rgba(0,0,0,.04)",transition:"border-color .18s",
+      }}
+        onFocus={e=>e.target.style.borderColor=D.gb}
+        onBlur={e=>e.target.style.borderColor=D.ln1}
+      />
+    </div>
+  );
+}
+
+function Divider({label}){
+  return(
+    <div style={{display:"flex",alignItems:"center",gap:10,margin:"18px 0 12px"}}>
+      <div style={{height:1,flex:1,background:`linear-gradient(90deg,transparent,${D.gb}44)`}}/>
+      <span style={{color:D.gb,fontSize:9,fontWeight:700,letterSpacing:2.5,textTransform:"uppercase",fontFamily:D.sans}}>{label}</span>
+      <div style={{height:1,flex:1,background:`linear-gradient(270deg,transparent,${D.gb}44)`}}/>
+    </div>
+  );
+}
+
+function KpiCard({label,value,sub,icon,color,alert}){
+  return(
+    <div style={{background:"#FFFFFF",borderRadius:14,padding:"14px",
+      border:alert?`1.5px solid ${D.red}55`:`1px solid ${D.ln1}`,
+      boxShadow:alert?`0 0 0 2px ${D.redD},0 2px 8px rgba(0,0,0,.06)`:"0 2px 8px rgba(0,0,0,.05)"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
+        <span style={{fontSize:18}}>{icon}</span>
+        {alert&&<span style={{fontSize:9,fontWeight:700,color:D.red,background:D.redD,padding:"2px 7px",borderRadius:10,fontFamily:D.sans}}>ALERTA</span>}
+      </div>
+      <div style={{fontFamily:D.display,fontSize:22,fontWeight:700,color:color||D.t0,lineHeight:1}}>{value}</div>
+      <div style={{color:D.t0,fontWeight:600,fontSize:11,marginTop:4,fontFamily:D.sans}}>{label}</div>
+      {sub&&<div style={{color:D.t2,fontSize:10,marginTop:2,fontFamily:D.sans}}>{sub}</div>}
+    </div>
+  );
+}
+
+/* ── Splash ── */
+function Splash({onDone}){
+  const [ph,setPh]=useState(0);
+  useEffect(()=>{
+    const t=[
+      setTimeout(()=>setPh(1),300),
+      setTimeout(()=>setPh(2),800),
+      setTimeout(()=>setPh(3),1500),
+      setTimeout(()=>onDone(),2600),
+    ];
+    return()=>t.forEach(clearTimeout);
+  },[]);
+  return(
+    <div style={{position:"fixed",inset:0,background:D.canvas,zIndex:9999,
+      display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
+      transition:"opacity .6s",opacity:ph===3?0:1,pointerEvents:"none",fontFamily:D.sans}}>
+      <div style={{position:"absolute",inset:0,backgroundImage:`radial-gradient(${D.ln1} 1px,transparent 1px)`,backgroundSize:"28px 28px",pointerEvents:"none"}}/>
+      <div style={{position:"relative",textAlign:"center"}}>
+        <div style={{opacity:ph>=1?1:0,transform:ph>=1?"scale(1)":"scale(.5)",transition:"all .55s cubic-bezier(.34,1.56,.64,1)",marginBottom:18,display:"flex",justifyContent:"center"}}>
+          <Logo size={58}/>
+        </div>
+        <div style={{opacity:ph>=2?1:0,transform:ph>=2?"translateY(0)":"translateY(12px)",transition:"all .45s .08s ease"}}>
+          <div style={{fontFamily:D.serif,fontSize:46,fontWeight:400,letterSpacing:10,color:D.t0,textTransform:"uppercase",lineHeight:1}}>Marella</div>
+          <div style={{fontFamily:D.display,fontSize:10,letterSpacing:4,color:D.gb,textTransform:"uppercase",marginTop:5}}>Order Intelligence System</div>
+        </div>
+        <div style={{marginTop:36,width:160,height:2,background:D.ln1,borderRadius:2,overflow:"hidden",opacity:ph>=2?1:0,transition:"opacity .3s .2s"}}>
+          <div style={{height:"100%",borderRadius:2,background:`linear-gradient(90deg,${D.nb3},${D.gb})`,width:ph>=2?"100%":"0%",transition:"width 1.4s .3s cubic-bezier(.4,0,.2,1)"}}/>
+        </div>
+        <div style={{marginTop:10,fontFamily:D.mono,fontSize:9,color:D.t2,opacity:ph>=2?1:0,transition:"opacity .3s .5s"}}>v{VER} · Firebase · {BUILD}</div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Role Select ── */
+function RoleSelect({onSelect}){
+  return(
+    <div style={{minHeight:"100vh",background:D.canvas,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:28,fontFamily:D.sans,position:"relative"}}>
+      <div style={{position:"absolute",inset:0,backgroundImage:`radial-gradient(${D.ln1} 1px,transparent 1px)`,backgroundSize:"28px 28px",pointerEvents:"none"}}/>
+      <div style={{position:"relative",textAlign:"center",maxWidth:400,width:"100%"}}>
+        <div style={{display:"flex",justifyContent:"center",marginBottom:12,animation:"M-rise .6s ease both"}}><Logo size={52}/></div>
+        <h1 style={{fontFamily:D.serif,fontSize:44,fontWeight:400,letterSpacing:8,color:D.t0,textTransform:"uppercase",margin:"0 0 4px",animation:"M-rise .6s .06s ease both"}}>Marella</h1>
+        <div style={{color:D.gb,fontSize:10,letterSpacing:4,textTransform:"uppercase",marginBottom:6,animation:"M-rise .6s .1s ease both",fontFamily:D.display}}>Order Intelligence System</div>
+        <div style={{color:D.t2,fontSize:12,marginBottom:36,animation:"M-rise .6s .14s ease both"}}>{TENANT}</div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12,marginBottom:32}}>
+          {Object.entries(ROLES).map(([key,r],i)=>(
+            <button key={key} onClick={()=>onSelect(key)}
+              style={{background:"#FFFFFF",border:`1px solid ${D.ln1}`,borderRadius:16,padding:"20px 10px",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:8,animation:`M-rise .6s ${.18+i*.07}s ease both`,transition:"all .22s",fontFamily:D.sans,boxShadow:"0 2px 8px rgba(0,0,0,.06)"}}
+              onMouseEnter={e=>{e.currentTarget.style.borderColor=D.gb;e.currentTarget.style.transform="translateY(-5px)";e.currentTarget.style.boxShadow="0 10px 28px rgba(138,104,32,.12)";}}
+              onMouseLeave={e=>{e.currentTarget.style.borderColor=D.ln1;e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 2px 8px rgba(0,0,0,.06)";}}>
+              <span style={{fontSize:28}}>{r.icon}</span>
+              <div style={{color:D.t0,fontWeight:600,fontSize:12,letterSpacing:.5}}>{r.label}</div>
+              <div style={{color:D.t2,fontSize:10,lineHeight:1.3,textAlign:"center"}}>{r.sub}</div>
+            </button>
+          ))}
+        </div>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,animation:"M-rise .6s .5s ease both"}}>
+          <span style={{width:5,height:5,borderRadius:"50%",background:D.green,display:"inline-block"}}/>
+          <span style={{fontFamily:D.mono,fontSize:10,color:D.t2}}>Firebase · Tiempo real · v{VER}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════
+   APP PRINCIPAL
+════════════════════════════════════════════════════════════ */
+function App(){
+  const [dbReady,  setDbReady]  = useState(!!window.DB_READY);
+  const [splash,   setSplash]   = useState(true);
+  const [rol,      setRol]      = useState(null);
+  const [pedidos,  setPedidos]  = useState([]);
+  const [menu,     setMenu]     = useState(MENU_DEFAULT);
+  const [comps,    setComps]    = useState([]);
+  const [vista,    setVista]    = useState("floor");
+  const [bell,     setBell]     = useState(false);
+  const prevPend                = useRef(0);
+
+  /* pedido nuevo */
+  const [mesa,    setMesa]    = useState("1");
+  const [carrito, setCarrito] = useState([]);
+  const [modM,    setModM]    = useState(null);
+  const [selM,    setSelM]    = useState([]);
+  const [noteI,   setNoteI]   = useState("");
+
+  /* cobro */
+  const [cobroM,  setCobroM]  = useState(null);
+  const [docT,    setDocT]    = useState("boleta");
+  const [cRUC,    setCRUC]    = useState("");
+  const [cRazon,  setCRazon]  = useState("");
+  const [cDir,    setCDir]    = useState("");
+  const [compM,   setCompM]   = useState(null);
+
+  /* UX */
+  const [filter,  setFilter]  = useState("all");
+  const [expand,  setExpand]  = useState(null);
+
+  /* reporte */
+  const hoy=isoD(Date.now());
+  const [exFrom,setExFrom]=useState(hoy);
+  const [exTo,  setExTo]  =useState(hoy);
+  const [exBusy,setExBusy]=useState(false);
+  const [exMsg, setExMsg] =useState(null);
+  const [editP, setEditP] =useState({});
+
+  /* ── Esperar a que Firebase esté listo ── */
+  useEffect(()=>{
+    if(window.DB_READY){ setDbReady(true); return; }
+    window.addEventListener("db-ready",()=>setDbReady(true),{once:true});
+  },[]);
+
+  /* ── Suscripciones Firestore en tiempo real ── */
+  useEffect(()=>{
+    if(!dbReady) return;
+    const u1 = window.DB.onPedidos(setPedidos);
+    const u2 = window.DB.onComps(setComps);
+    const u3 = window.DB.onMenu(setMenu);
+    return()=>{ u1(); u2(); u3(); };
+  },[dbReady]);
+
+  const vivos  = pedidos.filter(p=>!p.cerrado);
+  const nPend  = vivos.filter(p=>p.estado==="pendiente").length;
+  const nPrep  = vivos.filter(p=>p.estado==="preparando").length;
+  const nDone  = vivos.filter(p=>p.estado==="listo").length;
+  const nItems = vivos.reduce((s,p)=>s+p.items.length,0);
+
+  useEffect(()=>{
+    if(nPend>prevPend.current){setBell(true);setTimeout(()=>setBell(false),2500);}
+    prevPend.current=nPend;
+  },[nPend]);
+
+  /* ── Acciones ── */
+  const sendOrder = async () => {
+    if(!carrito.length) return;
+    const p={id:gid(),mesa:`Mesa ${mesa}`,items:[...carrito],estado:"pendiente",ts:Date.now(),cerrado:false};
+    await window.DB.savePedido(p);
+    setCarrito([]); setVista("floor");
+  };
+
+  const advance = async id => {
+    const now=Date.now();
+    const p=pedidos.find(x=>x.id===id); if(!p||!ESTADOS[p.estado].next) return;
+    const next=ESTADOS[p.estado].next;
+    await window.DB.savePedido({...p,estado:next,...(next==="listo"?{tsListo:now}:{})});
+  };
+
+  const addItem = () => {
+    if(!modM) return;
+    setCarrito(c=>[...c,{id:gid(),plato:modM.plato,precio:modM.plato.precio,mods:[...selM],nota:noteI}]);
+    setModM(null); setSelM([]); setNoteI("");
+  };
+
+  const issueDoc = async pedidoId => {
+    const p=pedidos.find(x=>x.id===pedidoId); if(!p) return;
+    const {base,igv,total}=tots(p.items);
+    const ts=Date.now();
+    const num=comps.length+1;
+    const serie=docT==="boleta"?"B001":"F001";
+    const comp={id:gid(),numero:`${serie}-${String(num).padStart(6,"0")}`,tipo:docT,ts,fecha:nowStr(),mesa:p.mesa,pedidoId,items:p.items,base,igv,total,...(docT==="factura"&&{ruc:cRUC,razon:cRazon,dir:cDir})};
+    await window.DB.saveComp(comp);
+    await window.DB.savePedido({...p,cerrado:true,compId:comp.id});
+    setCobroM(null); setCompM(comp);
+    setCRUC(""); setCRazon(""); setCDir(""); setDocT("boleta");
+  };
+
+  const savePrecio = async (cat,idx,val) => {
+    const n=parseFloat(val); if(isNaN(n)||n<=0) return;
+    const nm={...menu,[cat]:menu[cat].map((p,i)=>i===idx?{...p,precio:n}:p)};
+    await window.DB.saveMenu(nm); setEditP({});
+  };
+
+  const kpi=useMemo(()=>computeKPIs(pedidos,comps),[pedidos,comps]);
+  const rpFrom=new Date(exFrom+"T00:00:00").getTime();
+  const rpTo  =new Date(exTo+"T23:59:59").getTime();
+  const rpOrds=pedidos.filter(p=>p.ts>=rpFrom&&p.ts<=rpTo);
+  const rpRecs=comps.filter(c=>c.ts>=rpFrom&&c.ts<=rpTo);
+  const rpRev =rpRecs.reduce((s,c)=>s+c.total,0);
+
+  const TABS=[
+    {key:"floor",   icon:"⊞",label:"Comandas", roles:["waiter","kitchen","manager"]},
+    {key:"kitchen", icon:"🔥",label:"Cocina",   roles:["kitchen","manager"]},
+    {key:"kpi",     icon:"◈",label:"Analytics",roles:["manager"]},
+    {key:"new",     icon:"＋",label:"Pedido",   roles:["waiter"]},
+    {key:"receipts",icon:"⬡",label:"Caja",     roles:["waiter","manager"]},
+    {key:"reports", icon:"↓",label:"Reportes", roles:["manager"]},
+    {key:"menu",    icon:"✦",label:"Menú",     roles:["manager"]},
+  ].filter(t=>t.roles.includes(rol));
+
+  /* pantallas previas */
+  if(!dbReady) return(
+    <div style={{minHeight:"100vh",background:D.canvas,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:D.sans}}>
+      <div style={{textAlign:"center"}}>
+        <Logo size={48}/>
+        <div style={{color:D.t2,marginTop:14,fontSize:13}}>Conectando con Firebase…</div>
+      </div>
+    </div>
+  );
+  if(splash) return <Splash onDone={()=>setSplash(false)}/>;
+  if(!rol)   return <RoleSelect onSelect={r=>{setRol(r);setVista(r==="kitchen"?"kitchen":r==="manager"?"kpi":"floor");}}/>;
+
+  /* ════════════════════════════════════════════════════════
+     SHELL
+  ════════════════════════════════════════════════════════ */
+  return(
+    <div style={{minHeight:"100vh",background:D.canvas,fontFamily:D.sans,color:D.t0}}>
+
+      {/* HEADER */}
+      <header style={{position:"sticky",top:0,zIndex:200,background:"rgba(240,237,230,0.95)",backdropFilter:"blur(22px)",WebkitBackdropFilter:"blur(22px)",borderBottom:`1px solid ${D.ln1}`,boxShadow:"0 1px 0 rgba(0,0,0,.06)"}}>
+        <div style={{maxWidth:1200,margin:"0 auto",padding:"0 16px"}}>
+
+          {/* brand row */}
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",height:52}}>
+            <div style={{display:"flex",alignItems:"center",gap:10}}>
+              <Logo size={26}/>
+              <div>
+                <div style={{fontFamily:D.serif,color:D.gb,fontSize:20,fontWeight:600,letterSpacing:4,lineHeight:1}}>Marella</div>
+                <div style={{fontFamily:D.sans,color:D.t2,fontSize:9,letterSpacing:1.5,textTransform:"uppercase"}}>{ROLES[rol].label}</div>
+              </div>
+            </div>
+            <div style={{display:"flex",gap:7,alignItems:"center"}}>
+              {nPend>0&&(
+                <div style={{display:"flex",alignItems:"center",gap:5,background:D.amberD,border:`1px solid ${D.amber}44`,borderRadius:20,padding:"3px 10px",animation:"M-ping 1.4s infinite"}}>
+                  <span style={{width:5,height:5,borderRadius:"50%",background:D.amber,display:"inline-block"}}/>
+                  <span style={{fontSize:11,fontWeight:700,color:D.amber}}>{nPend} nuevo{nPend>1?"s":""}</span>
+                </div>
+              )}
+              {/* indicador Firebase en vivo */}
+              <div style={{display:"flex",alignItems:"center",gap:4,padding:"3px 9px",borderRadius:20,background:D.greenD,border:`1px solid ${D.green}33`}}>
+                <span style={{width:5,height:5,borderRadius:"50%",background:D.green,display:"inline-block"}}/>
+                <span style={{fontSize:9,color:D.green,fontFamily:D.mono,fontWeight:600}}>LIVE</span>
+              </div>
+              <button style={{width:34,height:34,borderRadius:9,background:"#FFFFFF",border:`1px solid ${D.ln1}`,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",position:"relative",animation:bell?"M-bell .5s ease":"none",transition:"all .18s",boxShadow:"0 1px 3px rgba(0,0,0,.06)"}}
+                onMouseEnter={e=>e.currentTarget.style.borderColor=D.gb}
+                onMouseLeave={e=>e.currentTarget.style.borderColor=D.ln1}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={D.t2} strokeWidth="2" strokeLinecap="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                {nPend>0&&<span style={{position:"absolute",top:5,right:5,width:6,height:6,borderRadius:"50%",background:D.amber}}/>}
+              </button>
+              <button onClick={()=>setRol(null)} style={{width:34,height:34,borderRadius:9,background:"#FFFFFF",border:`1px solid ${D.ln1}`,color:D.t2,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",transition:"all .18s",boxShadow:"0 1px 3px rgba(0,0,0,.06)"}}
+                onMouseEnter={e=>{e.currentTarget.style.borderColor=D.red;e.currentTarget.style.color=D.red;}}
+                onMouseLeave={e=>{e.currentTarget.style.borderColor=D.ln1;e.currentTarget.style.color=D.t2;}}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+              </button>
+            </div>
+          </div>
+
+          {/* workload strip */}
+          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",borderTop:`1px solid ${D.ln0}`,borderBottom:`1px solid ${D.ln0}`,marginLeft:-16,marginRight:-16}}>
+            {[{label:"Items",n:nItems,c:D.t0},{label:"Nuevo",n:nPend,c:D.amber},{label:"Cocina",n:nPrep,c:D.blue},{label:"Listo",n:nDone,c:D.green}].map((s,i)=>(
+              <div key={s.label} style={{padding:"9px 0",textAlign:"center",borderRight:i<3?`1px solid ${D.ln0}`:"none",cursor:i>0?"pointer":"default",transition:"background .18s"}}
+                onMouseEnter={e=>{if(i>0)e.currentTarget.style.background=D.bg4;}}
+                onMouseLeave={e=>{e.currentTarget.style.background="transparent";}}
+                onClick={()=>{if(i>0){setFilter(["all","pendiente","preparando","listo"][i]);setVista("floor");}}} >
+                <div style={{fontFamily:D.display,fontSize:19,fontWeight:700,color:s.c,lineHeight:1}}>{s.n}</div>
+                <div style={{fontFamily:D.sans,fontSize:8,color:D.t3,letterSpacing:.6,marginTop:2,textTransform:"uppercase"}}>{s.label}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* tabs */}
+          <div style={{display:"flex",overflowX:"auto"}}>
+            {TABS.map(tab=>{
+              const active=vista===tab.key;
+              return(
+                <button key={tab.key} onClick={()=>setVista(tab.key)} style={{flex:1,minWidth:52,padding:"10px 4px 12px",border:"none",background:"transparent",fontFamily:D.sans,fontWeight:active?600:400,fontSize:9,letterSpacing:.8,cursor:"pointer",color:active?D.gb:D.t3,textTransform:"uppercase",borderBottom:active?`2px solid ${D.gb}`:"2px solid transparent",transition:"all .18s",whiteSpace:"nowrap"}}>
+                  <div style={{fontSize:12,marginBottom:2,opacity:active?1:.5}}>{tab.icon}</div>
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </header>
+
+      {/* CONTENT */}
+      <main style={{maxWidth:1200,margin:"0 auto",padding:"0 16px",paddingBottom:40}}>
+
+        {/* ══ FLOOR ══ */}
+        {vista==="floor"&&(
+          <div style={{paddingTop:16}}>
+            <div style={{display:"flex",gap:6,marginBottom:16,overflowX:"auto",paddingBottom:2}}>
+              {[["all","Todos"],["pendiente","● Nuevo"],["preparando","◐ Cocina"],["listo","◉ Listo"]].map(([k,v])=>(
+                <button key={k} onClick={()=>{setFilter(k);setExpand(null);}} style={{padding:"5px 15px",borderRadius:20,border:"none",cursor:"pointer",fontFamily:D.sans,fontWeight:600,fontSize:10,whiteSpace:"nowrap",background:filter===k?D.gb:D.bg4,color:filter===k?"#111":D.t2,boxShadow:filter===k?"0 2px 8px rgba(201,168,76,.28)":"none",transition:"all .18s"}}>{v}</button>
+              ))}
+            </div>
+
+            {/* detalle */}
+            {expand&&(()=>{
+              const p=vivos.find(x=>x.id===expand);
+              if(!p){setExpand(null);return null;}
+              const st=ESTADOS[p.estado];
+              const {base,igv,total}=tots(p.items);
+              return(
+                <div style={{animation:"M-in .2s ease",maxWidth:640,margin:"0 auto"}}>
+                  <button onClick={()=>setExpand(null)} style={{display:"flex",alignItems:"center",gap:6,marginBottom:14,background:"none",border:"none",color:D.t2,fontSize:11,cursor:"pointer",fontFamily:D.sans}}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="m15 18-6-6 6-6"/></svg>
+                    Volver al floor
+                  </button>
+                  <div style={{background:"#FFFFFF",borderRadius:18,overflow:"hidden",border:`1px solid ${st.color}44`,boxShadow:"0 4px 24px rgba(0,0,0,.08)"}}>
+                    <div style={{padding:"14px 18px",background:`${st.color}0C`,borderBottom:`1px solid ${D.ln0}`}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+                        <div>
+                          <div style={{fontFamily:D.serif,fontSize:28,fontWeight:600,color:D.t0,lineHeight:1}}>{p.mesa}</div>
+                          <div style={{display:"flex",gap:10,marginTop:6,alignItems:"center"}}><Badge estado={p.estado}/><Timer ts={p.ts} color={D.t2}/></div>
+                          <div style={{color:D.t3,fontSize:10,marginTop:4,fontFamily:D.mono}}>{tsD(p.ts)} · {tsH(p.ts)}</div>
+                        </div>
+                        <div style={{textAlign:"right"}}>
+                          <div style={{color:D.gc,fontWeight:800,fontSize:24,fontFamily:D.serif}}>{fmt(total)}</div>
+                          <div style={{color:D.t3,fontSize:10,marginTop:2}}>{p.items.length} items</div>
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{padding:"12px 18px"}}>
+                      {p.items.map((it,i)=>(
+                        <div key={it.id} style={{display:"flex",gap:12,padding:"10px 0",borderBottom:i<p.items.length-1?`1px solid ${D.ln0}`:"none"}}>
+                          <div style={{width:42,height:42,borderRadius:10,background:D.bg4,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}}>{it.plato.emoji}</div>
+                          <div style={{flex:1}}>
+                            <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline"}}>
+                              <span style={{color:D.t0,fontWeight:500,fontSize:14}}>{it.plato.nombre}</span>
+                              <span style={{color:D.gc,fontWeight:700,fontSize:13,background:D.gd,padding:"1px 8px",borderRadius:8,fontFamily:D.mono}}>{fmt(it.precio)}</span>
+                            </div>
+                            {it.mods.length>0&&(
+                              <div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:5}}>
+                                {it.mods.map(mid=>{const m=MODS.find(x=>x.id===mid);return m?(<span key={mid} style={{padding:"2px 8px",borderRadius:6,fontSize:10,background:D.cb,border:`1px solid ${D.ca}33`,color:D.ca}}>{m.icon} {m.label}</span>):null;})}
+                              </div>
+                            )}
+                            {it.nota&&<div style={{color:D.t2,fontSize:11,marginTop:4,fontStyle:"italic"}}>📝 {it.nota}</div>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{padding:"10px 18px",background:D.bg4,borderTop:`1px solid ${D.ln0}`}}>
+                      {[{l:"Op. Gravada",v:fmt(base)},{l:"IGV 18%",v:fmt(igv)}].map(r=>(
+                        <div key={r.l} style={{display:"flex",justifyContent:"space-between",fontSize:11,color:D.t2,marginBottom:4}}><span>{r.l}</span><span style={{fontFamily:D.mono}}>{r.v}</span></div>
+                      ))}
+                      <div style={{display:"flex",justifyContent:"space-between",color:D.gc,fontWeight:800,fontSize:19,marginTop:8,paddingTop:8,borderTop:`1px solid ${D.ln1}`,fontFamily:D.serif}}><span>TOTAL</span><span>{fmt(total)}</span></div>
+                    </div>
+                    <div style={{padding:"12px 18px",display:"flex",gap:8,borderTop:`1px solid ${D.ln0}`}}>
+                      {ESTADOS[p.estado].next&&(
+                        <button onClick={()=>advance(p.id)} style={{flex:1,padding:"11px",borderRadius:10,cursor:"pointer",fontFamily:D.sans,fontWeight:700,fontSize:12,background:D.nb1,border:`1px solid ${D.nb2}`,color:"#F0F4FF",transition:"all .18s",boxShadow:"0 2px 8px rgba(10,31,56,.25)"}}
+                          onMouseEnter={e=>e.currentTarget.style.background=D.nb2}
+                          onMouseLeave={e=>e.currentTarget.style.background=D.nb1}>→ {ESTADOS[ESTADOS[p.estado].next].label}</button>
+                      )}
+                      {rol==="waiter"&&p.estado==="listo"&&(
+                        <Btn onClick={()=>setCobroM(p.id)} variant="gold" style={{flex:1,padding:"11px"}}>🧾 Cobrar mesa</Btn>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* grid */}
+            {!expand&&(()=>{
+              const list=vivos.filter(p=>filter==="all"||p.estado===filter);
+              if(!list.length) return(
+                <div style={{textAlign:"center",padding:"80px 20px"}}>
+                  <div style={{animation:"M-float 3s ease-in-out infinite",display:"inline-block"}}><Logo size={50}/></div>
+                  <p style={{color:D.t3,marginTop:14,fontSize:14}}>Sin comandas activas</p>
+                </div>
+              );
+              return(
+                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:12}}>
+                  {list.map(p=>{
+                    const st=ESTADOS[p.estado];
+                    const {total}=tots(p.items);
+                    const n=p.items.length;
+                    const urgente=(Date.now()-p.ts)>15*60000&&p.estado==="pendiente";
+                    return(
+                      <div key={p.id} onClick={()=>setExpand(p.id)}
+                        style={{background:"#FFFFFF",borderRadius:14,overflow:"hidden",cursor:"pointer",border:urgente?`1.5px solid ${D.red}55`:`1px solid ${st.color}33`,boxShadow:"0 1px 3px rgba(0,0,0,.04),0 4px 12px rgba(0,0,0,.05)",transition:"all .2s"}}
+                        onMouseEnter={e=>{e.currentTarget.style.borderColor=urgente?D.red:st.color;e.currentTarget.style.background=D.bg3;e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 6px 20px rgba(0,0,0,.10)";}}
+                        onMouseLeave={e=>{e.currentTarget.style.borderColor=urgente?`${D.red}55`:`${st.color}33`;e.currentTarget.style.background="#FFFFFF";e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 1px 3px rgba(0,0,0,.04),0 4px 12px rgba(0,0,0,.05)";}}>
+                        <div style={{padding:"6px 10px",background:urgente?`${D.red}0C`:`${st.color}12`,borderBottom:`1px solid ${D.ln0}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                          <Badge estado={p.estado} sm/><Timer ts={p.ts} color={urgente?D.red:undefined}/>
+                        </div>
+                        <div style={{padding:"10px 12px 8px"}}>
+                          <div style={{fontFamily:D.serif,fontSize:19,fontWeight:600,color:D.t0,marginBottom:2,lineHeight:1}}>{p.mesa}</div>
+                          <div style={{fontFamily:D.mono,color:D.t3,fontSize:9,marginBottom:8}}>{tsH(p.ts)}</div>
+                          {p.items.slice(0,3).map(it=>(
+                            <div key={it.id} style={{display:"flex",alignItems:"center",gap:5,marginBottom:3}}>
+                              <span style={{fontSize:12}}>{it.plato.emoji}</span>
+                              <span style={{color:D.t1,fontSize:11,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{it.plato.nombre}</span>
+                              {it.mods.length>0&&<span style={{color:D.ca,fontSize:9,fontFamily:D.mono}}>+{it.mods.length}</span>}
+                            </div>
+                          ))}
+                          {n>3&&<div style={{color:D.t3,fontSize:9,marginTop:2,fontFamily:D.mono}}>+{n-3} más</div>}
+                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:8,paddingTop:7,borderTop:`1px solid ${D.ln0}`}}>
+                            <span style={{color:D.t3,fontSize:9,fontFamily:D.mono}}>{n} item{n>1?"s":""}</span>
+                            <span style={{color:D.gc,fontWeight:700,fontSize:14,fontFamily:D.serif}}>{fmt(total)}</span>
+                          </div>
+                        </div>
+                        {ESTADOS[p.estado].next&&(
+                          <button onClick={e=>{e.stopPropagation();advance(p.id);}} style={{width:"100%",padding:"7px",border:"none",cursor:"pointer",fontFamily:D.sans,background:`${st.color}12`,color:st.color,fontWeight:600,fontSize:10,letterSpacing:.4,borderTop:`1px solid ${st.color}22`,transition:"background .18s"}}
+                            onMouseEnter={e=>e.currentTarget.style.background=`${st.color}24`}
+                            onMouseLeave={e=>e.currentTarget.style.background=`${st.color}12`}>→ {ESTADOS[ESTADOS[p.estado].next].label}</button>
+                        )}
+                        {rol==="waiter"&&p.estado==="listo"&&(
+                          <button onClick={e=>{e.stopPropagation();setCobroM(p.id);}} style={{width:"100%",padding:"7px",border:"none",cursor:"pointer",fontFamily:D.sans,background:D.gd,color:D.gb,fontWeight:600,fontSize:10,letterSpacing:.4,borderTop:`1px solid ${D.gb}22`,transition:"background .18s"}}
+                            onMouseEnter={e=>e.currentTarget.style.background=`${D.ga}22`}
+                            onMouseLeave={e=>e.currentTarget.style.background=D.gd}>🧾 Cobrar</button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+          </div>
+        )}
+
+        {/* ══ COCINA ══ */}
+        {vista==="kitchen"&&(
+          <div style={{paddingTop:16}}>
+            <div style={{background:"#FFFFFF",borderRadius:14,padding:"12px 16px",marginBottom:16,border:`1px solid ${D.ln1}`,boxShadow:"0 1px 4px rgba(0,0,0,.06)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div>
+                <div style={{fontFamily:D.serif,fontSize:18,fontWeight:600,color:D.t0}}>Estación de Cocina</div>
+                <div style={{color:D.t2,fontSize:11,marginTop:2}}>{new Date().toLocaleDateString("es-PE",{weekday:"long",day:"2-digit",month:"long"})}</div>
+              </div>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+              {/* PENDIENTE */}
+              <div>
+                <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:10}}>
+                  <span style={{width:8,height:8,borderRadius:"50%",background:D.amber,display:"inline-block"}}/>
+                  <span style={{color:D.amber,fontWeight:700,fontSize:10,letterSpacing:1,textTransform:"uppercase",fontFamily:D.sans}}>Pendiente ({vivos.filter(p=>p.estado==="pendiente").length})</span>
+                </div>
+                {vivos.filter(p=>p.estado==="pendiente").length===0&&(
+                  <div style={{background:"#FFFFFF",borderRadius:12,padding:"20px",border:`1px solid ${D.ln0}`,textAlign:"center",color:D.t3,fontSize:12}}>Sin pedidos</div>
+                )}
+                {vivos.filter(p=>p.estado==="pendiente").map(p=>{
+                  const urgente=(Date.now()-p.ts)>15*60000;
+                  return(
+                    <div key={p.id} style={{background:"#FFFFFF",borderRadius:12,overflow:"hidden",marginBottom:10,border:urgente?`1.5px solid ${D.red}55`:`1px solid ${D.amber}44`,boxShadow:"0 2px 8px rgba(0,0,0,.06)"}}>
+                      <div style={{padding:"7px 12px",background:`${D.amber}0C`,borderBottom:`1px solid ${D.ln0}`,display:"flex",justifyContent:"space-between"}}>
+                        <span style={{fontFamily:D.serif,fontSize:15,fontWeight:600,color:D.t0}}>{p.mesa}</span>
+                        <Timer ts={p.ts} color={urgente?D.red:D.amber}/>
+                      </div>
+                      <div style={{padding:"10px 12px"}}>
+                        {p.items.map(it=>(
+                          <div key={it.id} style={{marginBottom:6,display:"flex",gap:6,alignItems:"flex-start"}}>
+                            <span style={{fontSize:14}}>{it.plato.emoji}</span>
+                            <div style={{flex:1}}>
+                              <div style={{color:D.t0,fontSize:12,fontWeight:500,lineHeight:1.3}}>{it.plato.nombre}</div>
+                              {it.mods.length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:3,marginTop:3}}>{it.mods.map(mid=>{const m=MODS.find(x=>x.id===mid);return m?(<span key={mid} style={{fontSize:9,background:D.cb,color:D.ca,padding:"1px 6px",borderRadius:8}}>{m.icon} {m.label}</span>):null;})}</div>}
+                              {it.nota&&<div style={{fontSize:9,color:D.red,marginTop:2,fontStyle:"italic"}}>📝 {it.nota}</div>}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <button onClick={()=>advance(p.id)} style={{width:"100%",padding:"8px",border:"none",cursor:"pointer",fontFamily:D.sans,background:`${D.amber}14`,color:D.amber,fontWeight:700,fontSize:10,borderTop:`1px solid ${D.amber}22`,transition:"background .18s"}}
+                        onMouseEnter={e=>e.currentTarget.style.background=`${D.amber}28`}
+                        onMouseLeave={e=>e.currentTarget.style.background=`${D.amber}14`}>🔥 Iniciar preparación</button>
+                    </div>
+                  );
+                })}
+              </div>
+              {/* PREPARANDO */}
+              <div>
+                <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:10}}>
+                  <span style={{width:8,height:8,borderRadius:"50%",background:D.blue,display:"inline-block"}}/>
+                  <span style={{color:D.blue,fontWeight:700,fontSize:10,letterSpacing:1,textTransform:"uppercase",fontFamily:D.sans}}>Preparando ({vivos.filter(p=>p.estado==="preparando").length})</span>
+                </div>
+                {vivos.filter(p=>p.estado==="preparando").length===0&&(
+                  <div style={{background:"#FFFFFF",borderRadius:12,padding:"20px",border:`1px solid ${D.ln0}`,textAlign:"center",color:D.t3,fontSize:12}}>Sin pedidos</div>
+                )}
+                {vivos.filter(p=>p.estado==="preparando").map(p=>(
+                  <div key={p.id} style={{background:"#FFFFFF",borderRadius:12,overflow:"hidden",marginBottom:10,border:`1px solid ${D.blue}44`,boxShadow:"0 2px 8px rgba(0,0,0,.06)"}}>
+                    <div style={{padding:"7px 12px",background:`${D.blue}0C`,borderBottom:`1px solid ${D.ln0}`,display:"flex",justifyContent:"space-between"}}>
+                      <span style={{fontFamily:D.serif,fontSize:15,fontWeight:600,color:D.t0}}>{p.mesa}</span>
+                      <Timer ts={p.ts} color={D.blue}/>
+                    </div>
+                    <div style={{padding:"10px 12px"}}>
+                      {p.items.map(it=>(
+                        <div key={it.id} style={{marginBottom:6,display:"flex",gap:6,alignItems:"flex-start"}}>
+                          <span style={{fontSize:14}}>{it.plato.emoji}</span>
+                          <div style={{flex:1}}>
+                            <div style={{color:D.t0,fontSize:12,fontWeight:500,lineHeight:1.3}}>{it.plato.nombre}</div>
+                            {it.mods.length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:3,marginTop:3}}>{it.mods.map(mid=>{const m=MODS.find(x=>x.id===mid);return m?(<span key={mid} style={{fontSize:9,background:D.cb,color:D.ca,padding:"1px 6px",borderRadius:8}}>{m.icon} {m.label}</span>):null;})}</div>}
+                            {it.nota&&<div style={{fontSize:9,color:D.red,marginTop:2,fontStyle:"italic"}}>📝 {it.nota}</div>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <button onClick={()=>advance(p.id)} style={{width:"100%",padding:"8px",border:"none",cursor:"pointer",fontFamily:D.sans,background:`${D.green}14`,color:D.green,fontWeight:700,fontSize:10,borderTop:`1px solid ${D.green}22`,transition:"background .18s"}}
+                      onMouseEnter={e=>e.currentTarget.style.background=`${D.green}28`}
+                      onMouseLeave={e=>e.currentTarget.style.background=`${D.green}14`}>✓ Marcar como listo</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+            {/* LISTOS */}
+            {vivos.filter(p=>p.estado==="listo").length>0&&(
+              <div style={{marginTop:18}}>
+                <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:10}}>
+                  <span style={{width:8,height:8,borderRadius:"50%",background:D.green,display:"inline-block"}}/>
+                  <span style={{color:D.green,fontWeight:700,fontSize:10,letterSpacing:1,textTransform:"uppercase",fontFamily:D.sans}}>Esperando mozo — {vivos.filter(p=>p.estado==="listo").length} mesa{vivos.filter(p=>p.estado==="listo").length>1?"s":""}</span>
+                </div>
+                <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                  {vivos.filter(p=>p.estado==="listo").map(p=>(
+                    <div key={p.id} style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px solid ${D.green}44`,boxShadow:"0 2px 6px rgba(0,0,0,.06)"}}>
+                      <div style={{fontFamily:D.serif,fontSize:16,fontWeight:600,color:D.t0}}>{p.mesa}</div>
+                      <div style={{marginTop:2}}><Timer ts={p.ts} color={D.green}/></div>
+                      <div style={{color:D.t2,fontSize:10,marginTop:2}}>{p.items.length} plato{p.items.length>1?"s":""}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ══ KPIs ══ */}
+        {vista==="kpi"&&rol==="manager"&&(
+          <div style={{paddingTop:16}}>
+            {kpi.lentos>0&&(
+              <div style={{background:D.redD,border:`1px solid ${D.red}44`,borderRadius:12,padding:"12px 16px",marginBottom:16,display:"flex",gap:10,alignItems:"center"}}>
+                <span style={{fontSize:20}}>⚠️</span>
+                <div>
+                  <div style={{color:D.red,fontWeight:700,fontSize:12}}>{kpi.lentos} pedido{kpi.lentos>1?"s":""} sin atender por más de 15 min</div>
+                  <div style={{color:D.t1,fontSize:10,marginTop:1}}>Revisa la vista Cocina</div>
+                </div>
+              </div>
+            )}
+            <div style={{color:D.t2,fontSize:9,letterSpacing:2,textTransform:"uppercase",marginBottom:12,fontFamily:D.sans}}>Hoy · {new Date().toLocaleDateString("es-PE",{day:"2-digit",month:"short"})}</div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(170px,1fr))",gap:12,marginBottom:18}}>
+              <KpiCard icon="💰" label="Venta del día" value={fmt(kpi.ventaHoy)} sub={kpi.deltaVenta!==null?`${kpi.deltaVenta>=0?"+":""}${kpi.deltaVenta}% vs ayer`:undefined} color={D.gc}/>
+              <KpiCard icon="🧾" label="Ticket promedio" value={fmt(kpi.ticketProm)} color={D.nb3} sub={`${kpi.compHoy} comprobante${kpi.compHoy!==1?"s":""}`}/>
+              <KpiCard icon="⏱️" label="Tiempo promedio" value={kpi.avgTiempo!=null?`${kpi.avgTiempo} min`:"—"} color={kpi.avgTiempo>20?D.red:kpi.avgTiempo>12?D.amber:D.green} sub="pendiente → listo" alert={kpi.avgTiempo>20}/>
+              <KpiCard icon="✅" label="Sin modificaciones" value={`${kpi.tasaSinMods}%`} color={kpi.tasaSinMods>80?D.green:D.amber} sub={`${kpi.pedidosHoy} pedido${kpi.pedidosHoy!==1?"s":""} hoy`}/>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))",gap:14}}>
+              {/* Top platos */}
+              <div style={{background:"#FFFFFF",borderRadius:16,padding:18,border:`1px solid ${D.ln1}`,boxShadow:"0 1px 4px rgba(0,0,0,.06)"}}>
+                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:16}}>
+                  <div style={{width:3,height:18,background:`linear-gradient(${D.ga},${D.gc})`,borderRadius:2}}/>
+                  <span style={{color:D.t0,fontWeight:600,fontSize:13}}>Platos más vendidos</span>
+                </div>
+                {kpi.topPlatos.length===0&&<p style={{color:D.t3,fontSize:12,textAlign:"center",padding:"16px 0"}}>Sin datos aún</p>}
+                {kpi.topPlatos.map((pl,i)=>(
+                  <div key={pl.nombre} style={{marginBottom:12}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+                      <div style={{display:"flex",alignItems:"center",gap:7}}>
+                        <span style={{fontFamily:D.mono,fontSize:10,color:D.t3,minWidth:14}}>#{i+1}</span>
+                        <span style={{fontSize:14}}>{pl.emoji}</span>
+                        <span style={{color:D.t0,fontSize:12,fontWeight:500}}>{pl.nombre}</span>
+                      </div>
+                      <div style={{textAlign:"right"}}>
+                        <span style={{color:D.gc,fontWeight:700,fontSize:12,fontFamily:D.mono}}>{pl.n}×</span>
+                        <div style={{color:D.t3,fontSize:9,fontFamily:D.mono}}>{fmt(pl.rev)}</div>
+                      </div>
+                    </div>
+                    <div style={{height:4,background:D.bg4,borderRadius:10,overflow:"hidden"}}>
+                      <div style={{height:"100%",borderRadius:10,width:`${(pl.n/kpi.maxN)*100}%`,background:`linear-gradient(90deg,${D.nb3},${D.ga})`,transition:"width .6s ease"}}/>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {/* Actividad por hora */}
+              <div style={{background:"#FFFFFF",borderRadius:16,padding:18,border:`1px solid ${D.ln1}`,boxShadow:"0 1px 4px rgba(0,0,0,.06)"}}>
+                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:16}}>
+                  <div style={{width:3,height:18,background:`linear-gradient(${D.nb3},${D.nb4})`,borderRadius:2}}/>
+                  <span style={{color:D.t0,fontWeight:600,fontSize:13}}>Pedidos por hora · hoy</span>
+                </div>
+                {(()=>{
+                  const maxH=Math.max(...kpi.porHora,1);
+                  if(!kpi.porHora.some(n=>n>0)) return <p style={{color:D.t3,fontSize:12,textAlign:"center",padding:"20px 0"}}>Sin actividad hoy</p>;
+                  return(
+                    <div style={{display:"flex",gap:2,alignItems:"flex-end",height:64}}>
+                      {kpi.porHora.map((n,h)=>{
+                        const now=new Date().getHours();
+                        return(
+                          <div key={h} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
+                            <div style={{width:"100%",borderRadius:"3px 3px 0 0",height:`${Math.max(n/maxH*56,n>0?4:0)}px`,background:h===now?D.gb:`linear-gradient(180deg,${D.nb3},${D.nb1})`,transition:"height .5s ease",opacity:n===0?.15:1}}/>
+                            {h%6===0&&<div style={{fontSize:7,color:D.t3,fontFamily:D.mono}}>{pad(h)}</div>}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+              </div>
+              {/* Ventas por día */}
+              <div style={{background:"#FFFFFF",borderRadius:16,padding:18,border:`1px solid ${D.ln1}`,boxShadow:"0 1px 4px rgba(0,0,0,.06)"}}>
+                <div style={{color:D.t0,fontWeight:600,fontSize:13,marginBottom:16}}>Ventas por día</div>
+                {(()=>{
+                  const m={};
+                  pedidos.filter(p=>p.cerrado).forEach(p=>{const k=tsD(p.ts);if(!m[k])m[k]={k,total:0,n:0};m[k].total+=tots(p.items).total;m[k].n++;});
+                  const dias=Object.values(m).sort((a,b)=>b.k.localeCompare(a.k)).slice(0,7);
+                  if(!dias.length) return <p style={{color:D.t3,fontSize:11,textAlign:"center",padding:"20px 0"}}>Sin datos</p>;
+                  const maxV=Math.max(...dias.map(d=>d.total));
+                  return dias.map(d=>(
+                    <div key={d.k} style={{marginBottom:13}}>
+                      <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                        <span style={{color:D.t1,fontSize:11,fontFamily:D.mono}}>{d.k}</span>
+                        <span style={{color:D.gc,fontWeight:700,fontSize:12,fontFamily:D.serif}}>{fmt(d.total)}</span>
+                      </div>
+                      <div style={{height:4,background:D.bg4,borderRadius:10,overflow:"hidden"}}>
+                        <div style={{height:"100%",borderRadius:10,width:`${(d.total/maxV)*100}%`,background:`linear-gradient(90deg,${D.nb3},${D.ga})`,transition:"width .6s ease"}}/>
+                      </div>
+                      <div style={{color:D.t3,fontSize:9,marginTop:3,fontFamily:D.mono}}>{d.n} pedido{d.n>1?"s":""}</div>
+                    </div>
+                  ));
+                })()}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ══ NUEVO PEDIDO ══ */}
+        {vista==="new"&&rol==="waiter"&&(
+          <div style={{paddingTop:16,maxWidth:640}}>
+            <div style={{background:"#FFFFFF",borderRadius:16,padding:16,marginBottom:14,border:`1px solid ${D.ln1}`,boxShadow:"0 1px 4px rgba(0,0,0,.06)"}}>
+              <div style={{color:D.gb,fontSize:9,fontWeight:600,letterSpacing:2,textTransform:"uppercase",marginBottom:10,fontFamily:D.sans}}>Seleccionar mesa</div>
+              <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>
+                {["1","2","3","4","5","6","7","8","9","10","Barra","Delivery"].map(n=>(
+                  <button key={n} onClick={()=>setMesa(n)} style={{minWidth:40,height:36,padding:"0 10px",borderRadius:9,cursor:"pointer",fontFamily:D.sans,fontWeight:700,fontSize:12,border:`1px solid ${mesa===n?D.gb:D.ln1}`,background:mesa===n?D.gd:"#FFFFFF",color:mesa===n?D.gb:D.t2,boxShadow:mesa===n?"0 2px 8px rgba(138,104,32,.18)":"0 1px 2px rgba(0,0,0,.04)",transition:"all .18s"}}>{n}</button>
+                ))}
+              </div>
+            </div>
+            {carrito.length>0&&(
+              <div style={{background:"#FFFFFF",borderRadius:16,padding:16,marginBottom:14,border:`1px solid ${D.ln1}`,borderLeft:`3px solid ${D.gb}`,boxShadow:"0 1px 4px rgba(0,0,0,.06)"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                  <span style={{color:D.gb,fontWeight:700,fontSize:13}}>🛒 Mesa {mesa}</span>
+                  <span style={{color:D.t3,fontSize:10}}>× para quitar</span>
+                </div>
+                {carrito.map((it,i)=>(
+                  <div key={it.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:7,paddingBottom:7,borderBottom:i<carrito.length-1?`1px solid ${D.ln0}`:"none"}}>
+                    <span style={{color:D.t1,fontSize:12}}>{it.plato.emoji} {it.plato.nombre}{it.mods.length>0&&<span style={{color:D.ca,fontSize:10,fontFamily:D.mono}}> +{it.mods.length}</span>}</span>
+                    <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                      <span style={{color:D.gc,fontWeight:700,fontSize:12,fontFamily:D.mono}}>{fmt(it.precio)}</span>
+                      <button onClick={()=>setCarrito(c=>c.filter((_,j)=>j!==i))} style={{background:"none",border:"none",color:D.red,cursor:"pointer",fontSize:16,transition:"transform .15s"}}
+                        onMouseEnter={e=>e.currentTarget.style.transform="scale(1.3)"}
+                        onMouseLeave={e=>e.currentTarget.style.transform=""}>×</button>
+                    </div>
+                  </div>
+                ))}
+                <div style={{borderTop:`1px solid ${D.ln1}`,marginTop:8,paddingTop:10,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <div>
+                    <div style={{color:D.t3,fontSize:9,fontFamily:D.mono,letterSpacing:.5}}>TOTAL INCL. IGV</div>
+                    <div style={{color:D.gc,fontWeight:700,fontSize:20,fontFamily:D.serif}}>{fmt(tots(carrito).total)}</div>
+                  </div>
+                  <Btn onClick={sendOrder} variant="gold" style={{padding:"11px 22px"}}>Enviar pedido →</Btn>
+                </div>
+              </div>
+            )}
+            {Object.entries(menu).map(([cat,platos])=>(
+              <div key={cat} style={{marginBottom:20}}>
+                <Divider label={cat}/>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(140px,1fr))",gap:9}}>
+                  {platos.map(plato=>(
+                    <button key={plato.id} onClick={()=>{setModM({plato});setSelM([]);setNoteI("");}}
+                      style={{background:"#FFFFFF",borderRadius:14,padding:"14px 10px",border:`1px solid ${D.ln1}`,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:5,transition:"all .2s",fontFamily:D.sans,boxShadow:"0 1px 3px rgba(0,0,0,.04)"}}
+                      onMouseEnter={e=>{e.currentTarget.style.borderColor=D.gb;e.currentTarget.style.background=D.bg3;e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 6px 18px rgba(138,104,32,.12)";}}
+                      onMouseLeave={e=>{e.currentTarget.style.borderColor=D.ln1;e.currentTarget.style.background="#FFFFFF";e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 1px 3px rgba(0,0,0,.04)";}}>
+                      <div style={{width:44,height:44,borderRadius:12,background:D.bg4,display:"flex",alignItems:"center",justifyContent:"center",fontSize:24}}>{plato.emoji}</div>
+                      <span style={{fontSize:11,fontWeight:500,color:D.t0,textAlign:"center",lineHeight:1.25}}>{plato.nombre}</span>
+                      <span style={{fontSize:12,fontWeight:700,color:D.gc,background:D.gd,padding:"2px 10px",borderRadius:20,marginTop:2,fontFamily:D.mono}}>{fmt(plato.precio)}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* ══ CAJA ══ */}
+        {vista==="receipts"&&(
+          <div style={{paddingTop:16,maxWidth:640}}>
+            <div style={{color:D.t3,fontSize:9,letterSpacing:2,textTransform:"uppercase",marginBottom:14,fontFamily:D.sans}}>Comprobantes emitidos</div>
+            {comps.length===0&&<div style={{textAlign:"center",padding:"60px 20px"}}><div style={{fontSize:32,opacity:.2,color:D.t2}}>⬡</div><p style={{color:D.t3,marginTop:8,fontSize:13}}>Sin comprobantes</p></div>}
+            {comps.map(c=>(
+              <div key={c.id} onClick={()=>setCompM(c)}
+                style={{background:"#FFFFFF",borderRadius:13,padding:"13px 16px",marginBottom:8,border:`1px solid ${D.ln1}`,cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center",boxShadow:"0 1px 3px rgba(0,0,0,.04)",transition:"all .18s"}}
+                onMouseEnter={e=>{e.currentTarget.style.borderColor=D.gb;e.currentTarget.style.background=D.bg3;e.currentTarget.style.boxShadow="0 4px 14px rgba(138,104,32,.10)";}}
+                onMouseLeave={e=>{e.currentTarget.style.borderColor=D.ln1;e.currentTarget.style.background="#FFFFFF";e.currentTarget.style.boxShadow="0 1px 3px rgba(0,0,0,.04)";}}>
+                <div>
+                  <div style={{color:D.gb,fontWeight:700,fontSize:12,fontFamily:D.mono}}>{c.tipo==="boleta"?"🧾":"📄"} {c.numero}</div>
+                  <div style={{color:D.t1,fontSize:11,marginTop:2}}>{c.mesa}</div>
+                  <div style={{color:D.t3,fontSize:10,marginTop:1,fontFamily:D.mono}}>{tsD(c.ts)} · {tsH(c.ts)}{c.ruc&&` · RUC ${c.ruc}`}</div>
+                </div>
+                <div style={{textAlign:"right"}}>
+                  <div style={{color:D.gc,fontWeight:800,fontSize:15,fontFamily:D.serif}}>{fmt(c.total)}</div>
+                  <div style={{color:D.t3,fontSize:9,marginTop:2,textTransform:"capitalize"}}>{c.tipo}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* ══ REPORTES ══ */}
+        {vista==="reports"&&rol==="manager"&&(
+          <div style={{paddingTop:16,maxWidth:560}}>
+            <div style={{background:"#FFFFFF",borderRadius:18,padding:18,border:`1px solid ${D.ln1}`,boxShadow:"0 1px 4px rgba(0,0,0,.06)"}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
+                <div style={{width:3,height:18,background:`linear-gradient(${D.ga},${D.gc})`,borderRadius:2}}/>
+                <span style={{color:D.t0,fontWeight:600,fontSize:14}}>Exportar a Excel</span>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
+                {[{l:"Desde",v:exFrom,s:setExFrom},{l:"Hasta",v:exTo,s:setExTo}].map(f=>(
+                  <div key={f.l}>
+                    <div style={{color:D.t2,fontSize:9,letterSpacing:1.5,marginBottom:5,textTransform:"uppercase",fontFamily:D.sans,fontWeight:500}}>{f.l}</div>
+                    <input type="date" value={f.v} onChange={e=>f.s(e.target.value)} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:`1px solid ${D.ln1}`,background:"#FFFFFF",color:D.t0,fontSize:12,outline:"none",fontFamily:D.sans,boxShadow:"inset 0 1px 2px rgba(0,0,0,.04)",transition:"border-color .18s"}}
+                      onFocus={e=>e.target.style.borderColor=D.gb}
+                      onBlur={e=>e.target.style.borderColor=D.ln1}/>
+                  </div>
+                ))}
+              </div>
+              <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:14}}>
+                {[
+                  {l:"Hoy",   f:()=>{const h=isoD(Date.now());setExFrom(h);setExTo(h);}},
+                  {l:"Ayer",  f:()=>{const y=isoD(Date.now()-86400000);setExFrom(y);setExTo(y);}},
+                  {l:"7 días",f:()=>{setExFrom(isoD(Date.now()-6*86400000));setExTo(isoD(Date.now()));}},
+                  {l:"Mes",   f:()=>{const n=new Date();setExFrom(isoD(new Date(n.getFullYear(),n.getMonth(),1).getTime()));setExTo(isoD(Date.now()));}},
+                  {l:"Todo",  f:()=>{setExFrom("2020-01-01");setExTo("2099-12-31");}},
+                ].map(b=>(
+                  <button key={b.l} onClick={b.f} style={{padding:"4px 11px",borderRadius:20,border:`1px solid ${D.ln1}`,background:"#FFFFFF",color:D.t2,fontWeight:500,fontSize:10,cursor:"pointer",fontFamily:D.sans,transition:"all .15s"}}
+                    onMouseEnter={e=>{e.currentTarget.style.borderColor=D.gb;e.currentTarget.style.color=D.gb;}}
+                    onMouseLeave={e=>{e.currentTarget.style.borderColor=D.ln1;e.currentTarget.style.color=D.t2;}}>{b.l}</button>
+                ))}
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:14,background:D.bg4,borderRadius:12,padding:"12px 10px",border:`1px solid ${D.ln0}`}}>
+                {[{l:"Pedidos",v:rpOrds.length,c:D.nb3},{l:"Comprobantes",v:rpRecs.length,c:D.t1},{l:"Venta",v:fmt(rpRev),c:D.gc}].map(s=>(
+                  <div key={s.l} style={{textAlign:"center"}}>
+                    <div style={{color:s.c,fontWeight:700,fontSize:16,fontFamily:s.c===D.gc?D.serif:D.display}}>{s.v}</div>
+                    <div style={{color:D.t3,fontSize:9,marginTop:2}}>{s.l}</div>
+                  </div>
+                ))}
+              </div>
+              <Btn full disabled={exBusy} onClick={async()=>{setExBusy(true);setExMsg(null);await new Promise(r=>setTimeout(r,80));const ok=xlsxExport(pedidos,comps,rpFrom,rpTo);setExBusy(false);setExMsg(ok?"✓ Descargando...":"✗ Error al generar");setTimeout(()=>setExMsg(null),4000);}} variant="gold" style={{fontSize:14,padding:"13px"}}>{exBusy?"⏳ Generando...":"⬇  Descargar Excel"}</Btn>
+              {exMsg&&<div style={{marginTop:8,padding:"8px 12px",borderRadius:8,textAlign:"center",background:exMsg.startsWith("✓")?D.greenD:D.redD,border:`1px solid ${exMsg.startsWith("✓")?D.green:D.red}44`,color:exMsg.startsWith("✓")?D.green:D.red,fontSize:11,fontWeight:600}}>{exMsg}</div>}
+              <p style={{color:D.t3,fontSize:9,textAlign:"center",marginTop:8}}>3 hojas: Pedidos · Comprobantes · Resumen Diario</p>
+            </div>
+          </div>
+        )}
+
+        {/* ══ MENÚ ══ */}
+        {vista==="menu"&&rol==="manager"&&(
+          <div style={{paddingTop:16,maxWidth:640}}>
+            <div style={{color:D.t3,fontSize:9,letterSpacing:2,textTransform:"uppercase",marginBottom:14}}>Editar precios del menú</div>
+            {Object.entries(menu).map(([cat,platos])=>(
+              <div key={cat} style={{marginBottom:18}}>
+                <div style={{color:D.gb,fontWeight:600,fontSize:9,letterSpacing:2,textTransform:"uppercase",marginBottom:8}}>{cat}</div>
+                {platos.map((plato,idx)=>(
+                  <div key={plato.id} style={{background:"#FFFFFF",borderRadius:11,padding:"10px 13px",marginBottom:6,display:"flex",alignItems:"center",gap:10,border:`1px solid ${D.ln0}`,boxShadow:"0 1px 2px rgba(0,0,0,.04)"}}>
+                    <span style={{fontSize:18}}>{plato.emoji}</span>
+                    <span style={{flex:1,color:D.t0,fontSize:12}}>{plato.nombre}</span>
+                    {editP[plato.id]!==undefined?(
+                      <div style={{display:"flex",gap:5,alignItems:"center"}}>
+                        <input type="number" value={editP[plato.id]} onChange={e=>setEditP(p=>({...p,[plato.id]:e.target.value}))} style={{width:62,padding:"5px 7px",borderRadius:7,border:`1px solid ${D.gb}`,background:"#FFFFFF",color:D.gc,fontWeight:700,fontSize:12,outline:"none",fontFamily:D.mono}}/>
+                        <button onClick={()=>savePrecio(cat,idx,editP[plato.id])} style={{background:D.nb1,border:"none",borderRadius:7,color:"#FFFFFF",fontWeight:700,fontSize:11,padding:"5px 9px",cursor:"pointer"}}>✓</button>
+                        <button onClick={()=>setEditP(p=>{const n={...p};delete n[plato.id];return n;})} style={{background:D.bg4,border:"none",borderRadius:7,color:D.t2,fontSize:11,padding:"5px 9px",cursor:"pointer"}}>✕</button>
+                      </div>
+                    ):(
+                      <div style={{display:"flex",alignItems:"center",gap:8}}>
+                        <span style={{color:D.gc,fontWeight:700,fontSize:12,fontFamily:D.mono,background:D.gd,padding:"2px 10px",borderRadius:20}}>{fmt(plato.precio)}</span>
+                        <button onClick={()=>setEditP(p=>({...p,[plato.id]:String(plato.precio)}))} style={{background:"#FFFFFF",border:`1px solid ${D.ln1}`,borderRadius:7,color:D.t2,fontSize:10,padding:"4px 10px",cursor:"pointer",transition:"all .15s"}}
+                          onMouseEnter={e=>{e.currentTarget.style.borderColor=D.gb;e.currentTarget.style.color=D.gb;}}
+                          onMouseLeave={e=>{e.currentTarget.style.borderColor=D.ln1;e.currentTarget.style.color=D.t2;}}>editar</button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        )}
+      </main>
+
+      {/* MODAL: ITEM */}
+      {modM&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.50)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:300}} onClick={e=>{if(e.target===e.currentTarget)setModM(null);}}>
+          <div style={{background:"#FFFFFF",borderRadius:"22px 22px 0 0",padding:"28px 20px 44px",width:"100%",maxWidth:520,border:`1px solid ${D.ln1}`,boxShadow:"0 -8px 40px rgba(0,0,0,.14)",animation:"M-up .22s cubic-bezier(.22,.68,0,1.2)"}}>
+            <div style={{textAlign:"center",marginBottom:20}}>
+              <div style={{width:58,height:58,borderRadius:16,background:D.bg4,display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:32,marginBottom:10}}>{modM.plato.emoji}</div>
+              <div style={{fontFamily:D.serif,color:D.t0,fontSize:22,fontWeight:600}}>{modM.plato.nombre}</div>
+              <div style={{color:D.gc,fontWeight:700,fontSize:19,marginTop:5,fontFamily:D.mono,background:D.gd,display:"inline-block",padding:"2px 16px",borderRadius:20}}>{fmt(modM.plato.precio)}</div>
+            </div>
+            <div style={{color:D.t3,fontSize:9,letterSpacing:2,textTransform:"uppercase",marginBottom:10}}>Modificaciones</div>
+            <div style={{display:"flex",flexWrap:"wrap",gap:7,marginBottom:18}}>
+              {MODS.map(m=>{const on=selM.includes(m.id);return(<button key={m.id} onClick={()=>setSelM(p=>on?p.filter(x=>x!==m.id):[...p,m.id])} style={{padding:"7px 13px",borderRadius:20,cursor:"pointer",fontFamily:D.sans,border:`1px solid ${on?D.gb:D.ln1}`,background:on?D.gd:"#FFFFFF",color:on?D.gb:D.t2,fontWeight:600,fontSize:10,transition:"all .15s",boxShadow:on?"0 2px 8px rgba(138,104,32,.18)":"0 1px 2px rgba(0,0,0,.04)"}}>{m.icon} {m.label}</button>);})}
+            </div>
+            <Input label="Nota adicional" value={noteI} onChange={e=>setNoteI(e.target.value)} placeholder="Sin mariscos, alergia al ají..."/>
+            <div style={{display:"flex",gap:9,marginTop:6}}>
+              <Btn onClick={()=>setModM(null)} variant="ghost" style={{flex:1}}>Cancelar</Btn>
+              <Btn onClick={addItem} variant="gold" style={{flex:2}}>Agregar al pedido</Btn>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: COBRAR */}
+      {cobroM&&(()=>{
+        const p=pedidos.find(x=>x.id===cobroM); if(!p) return null;
+        const {base,igv,total}=tots(p.items);
+        return(
+          <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.52)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:300}} onClick={e=>{if(e.target===e.currentTarget)setCobroM(null);}}>
+            <div style={{background:"#FFFFFF",borderRadius:"22px 22px 0 0",padding:"26px 20px 44px",width:"100%",maxWidth:520,border:`1px solid ${D.ln1}`,animation:"M-up .22s cubic-bezier(.22,.68,0,1.2)",maxHeight:"90vh",overflowY:"auto",boxShadow:"0 -8px 40px rgba(0,0,0,.14)"}}>
+              <div style={{textAlign:"center",marginBottom:18}}>
+                <Logo size={36}/>
+                <div style={{fontFamily:D.serif,color:D.t0,fontSize:24,fontWeight:600,marginTop:8}}>{p.mesa}</div>
+                <div style={{fontFamily:D.mono,color:D.t3,fontSize:10,marginTop:3}}>{tsD(p.ts)} · {tsH(p.ts)}</div>
+              </div>
+              {p.items.map(it=>(
+                <div key={it.id} style={{display:"flex",justifyContent:"space-between",fontSize:12,color:D.t1,marginBottom:7,paddingBottom:7,borderBottom:`1px solid ${D.ln0}`}}>
+                  <span>{it.plato.emoji} {it.plato.nombre}</span>
+                  <span style={{color:D.gc,fontWeight:700,fontFamily:D.mono}}>{fmt(it.precio)}</span>
+                </div>
+              ))}
+              <div style={{background:D.bg4,borderRadius:12,padding:"12px 14px",marginBottom:16,border:`1px solid ${D.ln0}`,marginTop:6}}>
+                {[{l:"Op. Gravada",v:fmt(base)},{l:"IGV (18%)",v:fmt(igv)}].map(r=>(
+                  <div key={r.l} style={{display:"flex",justifyContent:"space-between",fontSize:11,color:D.t2,marginBottom:4}}><span>{r.l}</span><span style={{fontFamily:D.mono}}>{r.v}</span></div>
+                ))}
+                <div style={{display:"flex",justifyContent:"space-between",color:D.gc,fontWeight:700,fontSize:18,marginTop:8,paddingTop:8,borderTop:`1px solid ${D.ln1}`,fontFamily:D.serif}}><span>TOTAL</span><span>{fmt(total)}</span></div>
+              </div>
+              <div style={{color:D.t3,fontSize:9,letterSpacing:2,textTransform:"uppercase",marginBottom:10}}>Tipo de comprobante</div>
+              <div style={{display:"flex",gap:8,marginBottom:16}}>
+                {["boleta","factura"].map(tp=>(
+                  <button key={tp} onClick={()=>setDocT(tp)} style={{flex:1,padding:"11px",borderRadius:11,cursor:"pointer",fontFamily:D.sans,border:`1px solid ${docT===tp?D.gb:D.ln1}`,background:docT===tp?D.gd:"#FFFFFF",color:docT===tp?D.gb:D.t2,fontWeight:600,fontSize:12,transition:"all .15s",boxShadow:docT===tp?"0 2px 8px rgba(138,104,32,.18)":"none"}}>{tp==="boleta"?"🧾 Boleta":"📄 Factura"}</button>
+                ))}
+              </div>
+              {docT==="factura"&&(
+                <div style={{marginBottom:16}}>
+                  <Input label="RUC" value={cRUC} onChange={e=>setCRUC(e.target.value)} placeholder="20123456789"/>
+                  <Input label="Razón Social" value={cRazon} onChange={e=>setCRazon(e.target.value)} placeholder="Empresa S.A.C."/>
+                  <Input label="Dirección" value={cDir} onChange={e=>setCDir(e.target.value)} placeholder="Av. Ejemplo 123"/>
+                </div>
+              )}
+              <div style={{display:"flex",gap:8}}>
+                <Btn onClick={()=>setCobroM(null)} variant="ghost" style={{flex:1}}>Cancelar</Btn>
+                <Btn onClick={()=>issueDoc(p.id)} variant="gold" style={{flex:2}}>Emitir y Cerrar Mesa</Btn>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* MODAL: COMPROBANTE */}
+      {compM&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.55)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:400,padding:18}} onClick={e=>{if(e.target===e.currentTarget)setCompM(null);}}>
+          <div style={{background:"#FFFFFF",borderRadius:16,padding:"22px 20px",width:"100%",maxWidth:340,animation:"M-in .2s ease",maxHeight:"90vh",overflowY:"auto",fontFamily:D.sans,boxShadow:"0 20px 60px rgba(0,0,0,.18)"}}>
+            <div style={{textAlign:"center",paddingBottom:14,marginBottom:14,borderBottom:"2px dashed #E0DDD6"}}>
+              <div style={{fontSize:8,color:"#BDBAB2",letterSpacing:3,textTransform:"uppercase",marginBottom:2}}>Powered by Marea Systems</div>
+              <div style={{fontFamily:D.sans,fontWeight:700,fontSize:16,color:D.t0}}>{TENANT}</div>
+              <div style={{display:"inline-block",background:"#F0F9FF",border:"1px solid #BAE6FD",color:"#0369A1",fontSize:8,fontWeight:700,letterSpacing:2,padding:"2px 12px",borderRadius:20,marginTop:6,textTransform:"uppercase"}}>{compM.tipo==="boleta"?"Boleta de Venta":"Factura Electrónica"}</div>
+              <div style={{fontWeight:700,fontSize:13,color:D.t0,marginTop:6,letterSpacing:.5}}>{compM.numero}</div>
+              <div style={{fontSize:10,color:"#BDBAB2",marginTop:3}}>{compM.fecha}</div>
+            </div>
+            {compM.ruc&&<div style={{background:D.bg4,borderRadius:8,padding:"9px 11px",marginBottom:11,fontSize:11,color:"#444",lineHeight:1.8}}><b>RUC:</b> {compM.ruc}<br/><b>Razón:</b> {compM.razon}<br/><b>Dir:</b> {compM.dir}</div>}
+            <div style={{fontSize:11,color:"#999",marginBottom:9}}>{compM.mesa}</div>
+            {compM.items.map(it=>(
+              <div key={it.id} style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#222",marginBottom:7,paddingBottom:7,borderBottom:"1px solid #F0EDE6"}}>
+                <div>
+                  <div>{it.plato.emoji} {it.plato.nombre}</div>
+                  {it.mods?.length>0&&<div style={{fontSize:9,color:"#BDBAB2",marginTop:2}}>{it.mods.map(m=>MODS.find(x=>x.id===m)?.label||m).join(" · ")}</div>}
+                </div>
+                <span style={{fontWeight:700,fontFamily:D.mono,minWidth:54,textAlign:"right"}}>{fmt(it.precio)}</span>
+              </div>
+            ))}
+            <div style={{borderTop:"2px dashed #E0DDD6",marginTop:10,paddingTop:12}}>
+              {[{l:"Op. Gravada",v:fmt(compM.base),b:false},{l:"IGV (18%)",v:fmt(compM.igv),b:false},{l:"TOTAL",v:fmt(compM.total),b:true}].map(r=>(
+                <div key={r.l} style={{display:"flex",justifyContent:"space-between",fontSize:r.b?16:11,fontWeight:r.b?800:400,color:r.b?D.t0:"#888",marginBottom:5}}>
+                  <span>{r.l}</span><span style={{color:r.b?"#7A5C10":"inherit",fontFamily:D.mono}}>{r.v}</span>
+                </div>
+              ))}
+            </div>
+            <div style={{textAlign:"center",marginTop:12,fontSize:8,color:"#D8D5CE",letterSpacing:1,lineHeight:1.8}}>REPRESENTACIÓN IMPRESA · MAREA SYSTEMS v{VER} · {BUILD}</div>
+            <div style={{display:"flex",gap:9,marginTop:16}}>
+              <button onClick={()=>setCompM(null)} style={{flex:1,padding:"10px",borderRadius:9,border:`1px solid ${D.ln1}`,background:"#FFFFFF",color:D.t2,fontWeight:500,fontSize:12,cursor:"pointer"}}>Cerrar</button>
+              <button onClick={()=>printDoc(compM)} style={{flex:2,padding:"10px",borderRadius:9,border:"none",background:D.nb1,color:"#E8EFFF",fontWeight:700,fontSize:12,cursor:"pointer",boxShadow:"0 4px 14px rgba(10,31,56,.25)",transition:"all .18s"}}
+                onMouseEnter={e=>e.currentTarget.style.background=D.nb2}
+                onMouseLeave={e=>e.currentTarget.style.background=D.nb1}>🖨️ Imprimir {compM.tipo}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <style>{`
+        @keyframes M-rise{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:translateY(0)}}
+        @keyframes M-up{from{transform:translateY(112%)}to{transform:translateY(0)}}
+        @keyframes M-in{from{opacity:0}to{opacity:1}}
+        @keyframes M-ping{0%,100%{opacity:1}50%{opacity:.35}}
+        @keyframes M-bell{0%,100%{transform:rotate(0)}20%{transform:rotate(14deg)}40%{transform:rotate(-10deg)}60%{transform:rotate(6deg)}80%{transform:rotate(-3deg)}}
+        @keyframes M-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+        input[type=date]{color-scheme:light}
+        ::-webkit-scrollbar{width:3px;height:3px}
+        ::-webkit-scrollbar-track{background:transparent}
+        ::-webkit-scrollbar-thumb{background:#D1C4A8;border-radius:4px}
+        *{-webkit-tap-highlight-color:transparent}
+      `}</style>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
