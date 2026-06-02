@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -306,7 +307,30 @@ function App(){
     setAddToM(null);setAddCart([]);
   };
 
-  const issueDoc=async pedidoId=>{const p=pedidos.find(x=>x.id===pedidoId);if(!p)return;const t=tots(p.items,bcpActivo);const now=Date.now();const num=comps.length+1;const serie=docT==="boleta"?"B001":"F001";const comp={id:gid(),numero:`${serie}-${String(num).padStart(6,"0")}`,tipo:docT,ts:now,fecha:nowStr(),mesa:p.mesa,mozo:p.mozo,pedidoId,items:p.items,...t,turnoId:turnoActivo?.id||null,...(docT==="factura"&&{ruc:cRUC,razon:cRazon,dir:cDir})};await window.DB.saveComp(comp);await window.DB.savePedido({...p,cerrado:true,compId:comp.id,tsCobrado:now,bcpActivo});setCobroM(null);setCompM(comp);setBcpActivo(false);setCRUC("");setCRazon("");setCDir("");setDocT("boleta");setExpand(null);/* limpiar expand para que la mesa muestre libre */};
+  const issueDoc=async pedidoId=>{
+    const p=pedidos.find(x=>x.id===pedidoId);if(!p)return;
+    // Juntar items de adicionales de la misma mesa que estén listos o preparando
+    const adicionales=pedidos.filter(x=>
+      !x.cerrado &&
+      x.estado!=="desestimado" &&
+      x.eAdicional &&
+      x.pedidoOriginalId===pedidoId
+    );
+    const todosItems=[...p.items,...adicionales.flatMap(a=>a.items)];
+    const t=tots(todosItems,bcpActivo);
+    const now=Date.now();
+    const num=comps.length+1;
+    const serie=docT==="boleta"?"B001":"F001";
+    const comp={id:gid(),numero:`${serie}-${String(num).padStart(6,"0")}`,tipo:docT,ts:now,fecha:nowStr(),mesa:p.mesa,mozo:p.mozo,pedidoId,items:todosItems,...t,turnoId:turnoActivo?.id||null,...(docT==="factura"&&{ruc:cRUC,razon:cRazon,dir:cDir})};
+    await window.DB.saveComp(comp);
+    // Cerrar pedido principal
+    await window.DB.savePedido({...p,cerrado:true,compId:comp.id,tsCobrado:now,bcpActivo});
+    // Cerrar también todos los adicionales en la misma boleta
+    for(const a of adicionales){
+      await window.DB.savePedido({...a,cerrado:true,compId:comp.id,tsCobrado:now});
+    }
+    setCobroM(null);setCompM(comp);setBcpActivo(false);setCRUC("");setCRazon("");setCDir("");setDocT("boleta");setExpand(null);
+  };
 
   const desestimar=async()=>{const p=pedidos.find(x=>x.id===voidM);if(!p)return;const nota={id:gid(),ts:Date.now(),autor:empleado,texto:`ANULADO: ${voidReason||"Sin motivo"}`};await window.DB.savePedido({...p,estado:"desestimado",motivoAnulacion:voidReason,tsAnulado:Date.now(),notas:[...(p.notas||[]),nota]});setVoidM(null);setVoidReason("");setExpand(null);};
 
@@ -620,6 +644,20 @@ function App(){
                     </div>
                     <div style={{padding:"10px 12px"}}>
                       {p.items.map(it=>(<div key={it.id} style={{marginBottom:6,display:"flex",gap:6,alignItems:"flex-start"}}><span style={{fontSize:14}}>{it.plato.emoji}</span><div style={{flex:1}}><div style={{color:D.t0,fontSize:12,fontWeight:500,lineHeight:1.3}}>{it.plato.nombre}</div>{it.mods?.length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:3,marginTop:3}}>{it.mods.map(mid=>{const m=MODS.find(x=>x.id===mid);return m?(<span key={mid} style={{fontSize:9,background:D.cb,color:D.ca,padding:"1px 6px",borderRadius:8}}>{m.icon} {m.label}</span>):null;})}</div>}{it.nota&&<div style={{fontSize:9,color:D.red,marginTop:2,fontStyle:"italic"}}>📝 {it.nota}</div>}</div></div>))}
+                      {/* Notas del mozo visibles para cocina */}
+                      {p.notas?.filter(n=>!n.texto.startsWith("ANULADO")&&!n.texto.startsWith("➕")).length>0&&(
+                        <div style={{marginTop:8,paddingTop:8,borderTop:`1px solid ${D.ln0}`}}>
+                          {p.notas.filter(n=>!n.texto.startsWith("ANULADO")&&!n.texto.startsWith("➕")).map(n=>(
+                            <div key={n.id||n.ts} style={{display:"flex",gap:6,alignItems:"flex-start",marginBottom:4}}>
+                              <span style={{fontSize:10}}>📌</span>
+                              <div style={{flex:1}}>
+                                <span style={{color:D.gb,fontSize:9,fontWeight:600}}>{n.autor}: </span>
+                                <span style={{color:D.t1,fontSize:10}}>{n.texto}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                     <button onClick={()=>advance(p.id)} style={{width:"100%",padding:"8px",border:"none",cursor:"pointer",fontFamily:D.sans,background:`${st.color}14`,color:st.color,fontWeight:700,fontSize:10,borderTop:`1px solid ${st.color}22`,transition:"background .18s"}} onMouseEnter={e=>e.currentTarget.style.background=`${st.color}28`} onMouseLeave={e=>e.currentTarget.style.background=`${st.color}14`}>{estado==="pendiente"?"🔥 Iniciar":"✓ Listo"}</button>
                   </div>);})}
@@ -879,12 +917,20 @@ function App(){
 
 
       {/* ═══ MODAL: COBRAR ══ */}
-      {cobroM&&(()=>{const p=pedidos.find(x=>x.id===cobroM);if(!p)return null;const t=tots(p.items,bcpActivo);const descBCPpreview=Math.min(p.items.filter(i=>!i.plato.esBebida).reduce((s,i)=>s+i.precio,0)*BCP_DESC,BCP_MAX);return(
+      {cobroM&&(()=>{
+        const p=pedidos.find(x=>x.id===cobroM);if(!p)return null;
+        const adicionales=pedidos.filter(x=>!x.cerrado&&x.estado!=="desestimado"&&x.eAdicional&&x.pedidoOriginalId===cobroM);
+        const todosItems=[...p.items,...adicionales.flatMap(a=>a.items)];
+        const t=tots(todosItems,bcpActivo);
+        const descBCPpreview=Math.min(todosItems.filter(i=>!i.plato.esBebida).reduce((s,i)=>s+i.precio,0)*BCP_DESC,BCP_MAX);
+        return(
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.52)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:300}} onClick={e=>{if(e.target===e.currentTarget){setCobroM(null);setBcpActivo(false);}}}><div style={{background:"#FFFFFF",borderRadius:"22px 22px 0 0",padding:"26px 18px 42px",width:"100%",maxWidth:520,border:`1px solid ${D.ln1}`,animation:"M-up .22s cubic-bezier(.22,.68,0,1.2)",maxHeight:"90vh",overflowY:"auto",boxShadow:"0 -8px 40px rgba(0,0,0,.14)"}}>
           <div style={{textAlign:"center",marginBottom:16}}><Logo size={34}/><div style={{fontFamily:D.serif,color:D.t0,fontSize:22,fontWeight:600,marginTop:8}}>{p.mesa}</div>{p.mozo&&<div style={{color:D.t2,fontSize:11,marginTop:2}}>🤵 {p.mozo}</div>}</div>
           {p.items.map(it=>(<div key={it.id} style={{display:"flex",justifyContent:"space-between",fontSize:12,color:D.t1,marginBottom:7,paddingBottom:7,borderBottom:`1px solid ${D.ln0}`}}><span>{it.plato.emoji} {it.plato.nombre}{it.plato.esBebida?<span style={{fontSize:9,color:D.blue,marginLeft:4}}>🍹</span>:""}</span><span style={{color:D.gc,fontWeight:700,fontFamily:D.mono}}>{fmt(it.precio)}</span></div>))}
-          {/* BCP Toggle */}
+          {adicionales.length>0&&(<><div style={{display:"flex",alignItems:"center",gap:6,margin:"8px 0 6px",paddingTop:4,borderTop:`1px dashed ${D.purple}44`}}><span style={{fontSize:9,color:D.purple,fontWeight:700,fontFamily:D.mono}}>+ADICIONALES</span></div>{adicionales.flatMap(a=>a.items).map(it=>(<div key={it.id} style={{display:"flex",justifyContent:"space-between",fontSize:12,color:D.t1,marginBottom:7,paddingBottom:7,borderBottom:`1px solid ${D.ln0}`}}><span style={{color:D.purple}}>{it.plato.emoji} {it.plato.nombre}</span><span style={{color:D.gc,fontWeight:700,fontFamily:D.mono}}>{fmt(it.precio)}</span></div>))}</>)}
           <div style={{background:bcpActivo?"#EFF6FF":D.bg4,borderRadius:12,padding:"12px 14px",marginBottom:12,border:bcpActivo?`1.5px solid ${D.blue}44`:`1px solid ${D.ln1}`,transition:"all .2s"}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><div><div style={{display:"flex",alignItems:"center",gap:6}}><span style={{fontSize:16}}>🏦</span><span style={{color:D.t0,fontWeight:700,fontSize:13}}>Descuento BCP Visa</span></div><div style={{color:D.t2,fontSize:10,marginTop:3}}>40% comida · máx S/100 · no aplica bebidas</div></div><button onClick={()=>setBcpActivo(v=>!v)} style={{width:44,height:26,borderRadius:13,border:"none",cursor:"pointer",background:bcpActivo?D.blue:"#D1D5DB",transition:"background .2s",position:"relative",flexShrink:0}}><span style={{position:"absolute",top:3,left:bcpActivo?20:3,width:20,height:20,borderRadius:"50%",background:"#FFFFFF",transition:"left .2s",boxShadow:"0 1px 3px rgba(0,0,0,.2)"}}/></button></div>{bcpActivo&&<div style={{marginTop:10,paddingTop:10,borderTop:`1px solid ${D.blue}22`}}><div style={{color:D.blue,fontWeight:700,fontSize:13}}>-{fmt(descBCPpreview)} aplicado</div><div style={{color:D.t2,fontSize:10,marginTop:3}}>Solo comida · No bebidas · No acumulable</div></div>}</div>
+          <div style={{background:D.bg4,borderRadius:12,padding:"12px 14px",marginBottom:14,border:`1px solid ${D.ln0}`}}>{[{l:"Op. Gravada",v:fmt(t.base)},{l:"IGV (18%)",v:fmt(t.igv)}].map(r=>(<div key={r.l} style={{display:"flex",justifyContent:"space-between",fontSize:11,color:D.t2,marginBottom:4}}><span>{r.l}</span><span style={{fontFamily:D.mono}}>{r.v}</span></div>))}{t.descBCP>0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:D.blue,marginBottom:4,fontWeight:600}}><span>🏦 BCP Visa</span><span style={{fontFamily:D.mono}}>-{fmt(t.descBCP)}</span></div>}<div style={{display:"flex",justifyContent:"space-between",color:D.gc,fontWeight:700,fontSize:19,marginTop:8,paddingTop:8,borderTop:`1px solid ${D.ln1}`,fontFamily:D.serif}}><span>TOTAL</span><span>{fmt(t.totalConDesc)}</span></div></div>
+          <div style={{color:D.t3,fontSize:9,letterSpacing:2,textTransform:"uppercase",marginBottom:10}}>Tipo de comprobante</div>
           <div style={{display:"flex",gap:8,marginBottom:14}}>{["boleta","factura"].map(tp=>(<button key={tp} onClick={()=>setDocT(tp)} style={{flex:1,padding:"11px",borderRadius:11,cursor:"pointer",fontFamily:D.sans,border:`1px solid ${docT===tp?D.gb:D.ln1}`,background:docT===tp?D.gd:"#FFFFFF",color:docT===tp?D.gb:D.t2,fontWeight:600,fontSize:12,transition:"all .15s"}}>{tp==="boleta"?"🧾 Boleta":"📄 Factura"}</button>))}</div>
           {docT==="factura"&&<div style={{marginBottom:14}}><Inp label="RUC" value={cRUC} onChange={e=>setCRUC(e.target.value)} placeholder="20123456789"/><Inp label="Razón Social" value={cRazon} onChange={e=>setCRazon(e.target.value)} placeholder="Empresa S.A.C."/><Inp label="Dirección" value={cDir} onChange={e=>setCDir(e.target.value)} placeholder="Av. Ejemplo 123"/></div>}
           <div style={{display:"flex",gap:8}}><Btn onClick={()=>{setCobroM(null);setBcpActivo(false);}} variant="ghost" style={{flex:1}}>Cancelar</Btn><Btn onClick={()=>issueDoc(p.id)} variant="gold" style={{flex:2}}>Emitir y Cerrar Mesa</Btn></div>
