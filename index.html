@@ -733,9 +733,16 @@ function App(){
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
               {["pendiente","preparando"].map(estado=>{
                 const st=ESTADOS[estado];const lista=vivos.filter(p=>p.estado===estado);
+                // Fantasmas: pedidos de hoy que ya pasaron de esta zona (solo para pendiente)
+                const fantasmas=estado==="pendiente"
+                  ? vivos.filter(p=>p.estado==="preparando"||p.estado==="listo")
+                  : [];
                 return(<div key={estado}>
-                  <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:10}}><span style={{width:8,height:8,borderRadius:"50%",background:st.color,display:"inline-block"}}/><span style={{color:st.color,fontWeight:700,fontSize:10,letterSpacing:1,textTransform:"uppercase"}}>{st.label} ({lista.length})</span></div>
-                  {lista.length===0&&<div style={{background:"#FFFFFF",borderRadius:12,padding:"18px",border:`1px solid ${D.ln0}`,textAlign:"center",color:D.t3,fontSize:12}}>Sin pedidos</div>}
+                  <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:10}}>
+                    <span style={{width:8,height:8,borderRadius:"50%",background:st.color,display:"inline-block"}}/>
+                    <span style={{color:st.color,fontWeight:700,fontSize:10,letterSpacing:1,textTransform:"uppercase"}}>{st.label} ({lista.length})</span>
+                  </div>
+                  {lista.length===0&&fantasmas.length===0&&<div style={{background:"#FFFFFF",borderRadius:12,padding:"18px",border:`1px solid ${D.ln0}`,textAlign:"center",color:D.t3,fontSize:12}}>Sin pedidos</div>}
                   {lista.map(p=>{const urgente=estado==="pendiente"&&(Date.now()-p.ts)>15*60000;return(<div key={p.id} style={{background:"#FFFFFF",borderRadius:12,overflow:"hidden",marginBottom:9,border:urgente?`1.5px solid ${D.red}55`:`1px solid ${st.color}44`,boxShadow:"0 2px 8px rgba(0,0,0,.06)"}}>
                     <div style={{padding:"7px 12px",background:`${st.color}0C`,borderBottom:`1px solid ${D.ln0}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                       <div><span style={{fontFamily:D.serif,fontSize:15,fontWeight:600,color:D.t0}}>{p.mesa}</span>{p.mozo&&<span style={{fontSize:10,color:D.t2,marginLeft:6}}>· {p.mozo}</span>}{p.eAdicional&&<span style={{fontSize:9,color:D.purple,fontFamily:D.mono,marginLeft:6}}>+ADD</span>}</div>
@@ -744,16 +751,12 @@ function App(){
                     </div>
                     <div style={{padding:"10px 12px"}}>
                       {p.items.map(it=>(<div key={it.id} style={{marginBottom:6,display:"flex",gap:6,alignItems:"flex-start"}}><span style={{fontSize:14}}>{it.plato.emoji}</span><div style={{flex:1}}><div style={{color:D.t0,fontSize:12,fontWeight:500,lineHeight:1.3}}>{it.plato.nombre}</div>{it.mods?.length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:3,marginTop:3}}>{it.mods.map(mid=>{const m=MODS.find(x=>x.id===mid);return m?(<span key={mid} style={{fontSize:9,background:D.cb,color:D.ca,padding:"1px 6px",borderRadius:8}}>{m.icon} {m.label}</span>):null;})}</div>}{it.nota&&<div style={{fontSize:9,color:D.red,marginTop:2,fontStyle:"italic"}}>📝 {it.nota}</div>}</div></div>))}
-                      {/* Notas del mozo visibles para cocina */}
                       {p.notas?.filter(n=>!n.texto.startsWith("ANULADO")&&!n.texto.startsWith("➕")).length>0&&(
                         <div style={{marginTop:8,paddingTop:8,borderTop:`1px solid ${D.ln0}`}}>
                           {p.notas.filter(n=>!n.texto.startsWith("ANULADO")&&!n.texto.startsWith("➕")).map(n=>(
                             <div key={n.id||n.ts} style={{display:"flex",gap:6,alignItems:"flex-start",marginBottom:4}}>
                               <span style={{fontSize:10}}>📌</span>
-                              <div style={{flex:1}}>
-                                <span style={{color:D.gb,fontSize:9,fontWeight:600}}>{n.autor}: </span>
-                                <span style={{color:D.t1,fontSize:10}}>{n.texto}</span>
-                              </div>
+                              <div style={{flex:1}}><span style={{color:D.gb,fontSize:9,fontWeight:600}}>{n.autor}: </span><span style={{color:D.t1,fontSize:10}}>{n.texto}</span></div>
                             </div>
                           ))}
                         </div>
@@ -763,7 +766,43 @@ function App(){
                     </div>
                     <button onClick={()=>advance(p.id)} style={{width:"100%",padding:"8px",border:"none",cursor:"pointer",fontFamily:D.sans,background:`${st.color}14`,color:st.color,fontWeight:700,fontSize:10,borderTop:`1px solid ${st.color}22`,transition:"background .18s"}} onMouseEnter={e=>e.currentTarget.style.background=`${st.color}28`} onMouseLeave={e=>e.currentTarget.style.background=`${st.color}14`}>{estado==="pendiente"?"🔥 Iniciar":"✓ Listo"}</button>
                   </div>);})}
+
+                  {/* Fantasmas — zona pendiente congelada de pedidos que ya avanzaron */}
+                  {fantasmas.map(p=>{
+                    const durMozo=p.tsPreparando?p.tsPreparando-p.ts:null;
+                    const minsM=durMozo?(durMozo/60000).toFixed(1):null;
+                    const alerta=durMozo&&durMozo>5*60000;
+                    return(
+                      <div key={`ghost-${p.id}`} style={{background:"#FFFFFF",borderRadius:12,overflow:"hidden",marginBottom:9,border:`1px solid ${D.ln0}`,opacity:.55,filter:"saturate(0.4)"}}>
+                        <div style={{padding:"7px 12px",background:D.bg4,borderBottom:`1px solid ${D.ln0}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                          <div>
+                            <span style={{fontFamily:D.serif,fontSize:14,fontWeight:600,color:D.t1}}>{p.mesa}</span>
+                            {p.mozo&&<span style={{fontSize:10,color:D.t2,marginLeft:6}}>· {p.mozo}</span>}
+                          </div>
+                          <span style={{fontSize:9,color:D.t3,fontFamily:D.mono,background:D.bg3,padding:"2px 7px",borderRadius:8}}>✓ pasó a cocina</span>
+                        </div>
+                        <div style={{padding:"8px 12px"}}>
+                          {p.items.slice(0,2).map(it=>(<div key={it.id} style={{display:"flex",gap:5,alignItems:"center",marginBottom:3}}><span style={{fontSize:12,opacity:.6}}>{it.plato.emoji}</span><span style={{color:D.t2,fontSize:11}}>{it.plato.nombre}</span></div>))}
+                          {p.items.length>2&&<div style={{color:D.t3,fontSize:9}}>+{p.items.length-2} más</div>}
+                          {/* Barra congelada del mozo */}
+                          <div style={{marginTop:8,paddingTop:8,borderTop:`1px solid ${D.ln0}`}}>
+                            <div style={{display:"flex",alignItems:"center",gap:6}}>
+                              <span style={{fontSize:9}}>🤵</span>
+                              <div style={{flex:1,height:5,borderRadius:10,overflow:"hidden",background:D.bg3}}>
+                                <div style={{height:"100%",borderRadius:10,background:alerta?D.red:D.amber,width:"100%"}}/>
+                              </div>
+                              <span style={{fontSize:10,fontWeight:700,color:alerta?D.red:D.amber,fontFamily:D.mono,background:`${alerta?D.red:D.amber}18`,padding:"2px 8px",borderRadius:10}}>
+                                {minsM?`${minsM}m ✓`:"—"}
+                              </span>
+                            </div>
+                            <div style={{fontSize:8,color:D.t3,marginTop:3,textAlign:"right",fontFamily:D.mono}}>{p.tsPreparando?tsH(p.tsPreparando):""}</div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>);
+              })}
               })}
             </div>
             {vivos.filter(p=>p.estado==="listo").length>0&&(
