@@ -49,7 +49,7 @@ const MENU_DEFAULT={
   "Bebidas":[{id:"be1",nombre:"Chicha Morada",emoji:"🫙",precio:12,esBebida:true},{id:"be2",nombre:"Maracuyá Frozen",emoji:"🍹",precio:15,esBebida:true},{id:"be3",nombre:"Agua Mineral",emoji:"💧",precio:8,esBebida:true},{id:"be4",nombre:"Cerveza",emoji:"🍺",precio:14,esBebida:true},{id:"be5",nombre:"Pisco Sour",emoji:"🍸",precio:22,esBebida:true}],
 };
 const AGOTADOS_DEFAULT={};
-const MODS=[{id:"sp",label:"Sin picante",icon:"🌶️"},{id:"xl",label:"Extra limón",icon:"🍋"},{id:"sc",label:"Sin cebolla",icon:"🧅"},{id:"sf",label:"Sin cilantro",icon:"🌿"},{id:"ps",label:"Poco sal",icon:"🧂"},{id:"et",label:"Extra leche tigre",icon:"🥛"},{id:"sa",label:"Sin ají amarillo",icon:"🫑"},{id:"pk",label:"Para llevar",icon:"📦"},{id:"sg",label:"Sin mariscos",icon:"🚫"},{id:"al",label:"Alergia mariscos",icon:"⚠️"}];
+const MODS=[{id:"sp",label:"Sin picante",icon:"🌶️",esBebida:false},{id:"xl",label:"Extra limón",icon:"🍋",esBebida:false},{id:"sc",label:"Sin cebolla",icon:"🧅",esBebida:false},{id:"sf",label:"Sin cilantro",icon:"🌿",esBebida:false},{id:"ps",label:"Poco sal",icon:"🧂",esBebida:false},{id:"et",label:"Extra leche tigre",icon:"🥛",esBebida:false},{id:"sa",label:"Sin ají amarillo",icon:"🫑",esBebida:false},{id:"pk",label:"Para llevar",icon:"📦",esBebida:true},{id:"sg",label:"Sin mariscos",icon:"🚫",esBebida:false},{id:"al",label:"Alergia mariscos",icon:"⚠️",esBebida:false},{id:"ss",label:"Sin hielo",icon:"🧊",esBebida:true},{id:"sl",label:"Sin azúcar",icon:"🍬",esBebida:true},{id:"xf",label:"Extra frío",icon:"❄️",esBebida:true},{id:"sp2",label:"Sin gas",icon:"💧",esBebida:true}];
 const MESAS=["1","2","3","4","5","6","7","8","9","10","Barra","Delivery"];
 const EMPLEADOS_DEFAULT={mozos:["Carlos","Miguel","Lucia","Sofia","Diego"],cocina:["Chef Mario","Ana","Roberto","Patricia","Luis"]};
 const ESTADOS={pendiente:{label:"Pendiente",eng:"NEW",color:D.amber,dim:D.amberD,next:"preparando"},preparando:{label:"Preparando",eng:"COOKING",color:D.blue,dim:D.blueD,next:"listo"},listo:{label:"Listo",eng:"READY",color:D.green,dim:D.greenD,next:null},desestimado:{label:"Anulado",eng:"VOID",color:D.red,dim:D.redD,next:null}};
@@ -702,8 +702,34 @@ function App(){
                           ))}
                         </div>
                       )}
+                      {/* Barra de zonas en cocina */}
+                      {(()=>{
+                        const tMC=p.tsPreparando?((p.tsPreparando-p.ts)/60000).toFixed(1):null;
+                        const tCP=p.tsListo&&p.tsPreparando?((p.tsListo-p.tsPreparando)/60000).toFixed(1):null;
+                        const activeColor=estado==="pendiente"?D.amber:D.blue;
+                        return(
+                          <div style={{marginTop:8,paddingTop:8,borderTop:`1px solid ${D.ln0}`}}>
+                            <div style={{display:"flex",gap:3,alignItems:"center"}}>
+                              {/* Zona mozo */}
+                              <span style={{fontSize:9,opacity:1}}>🤵</span>
+                              <div style={{flex:1,height:3,borderRadius:10,background:D.bg4,overflow:"hidden",minWidth:20}}>
+                                <div style={{height:"100%",borderRadius:10,background:D.amber,width:p.tsPreparando?"100%":"60%",transition:"width .3s"}}/>
+                              </div>
+                              {tMC&&<span style={{fontSize:8,color:D.amber,fontFamily:D.mono,whiteSpace:"nowrap"}}>{tMC}m✓</span>}
+                              {!tMC&&<span style={{fontSize:8,color:D.amber,fontFamily:D.mono}}>…</span>}
+                              <span style={{color:D.t3,fontSize:8,flexShrink:0}}>›</span>
+                              {/* Zona cocina */}
+                              <span style={{fontSize:9,opacity:p.tsPreparando?1:.3}}>🔥</span>
+                              <div style={{flex:1,height:3,borderRadius:10,background:D.bg4,overflow:"hidden",minWidth:20,opacity:p.tsPreparando?1:.3}}>
+                                <div style={{height:"100%",borderRadius:10,background:D.blue,width:p.tsListo?"100%":p.tsPreparando?"50%":"0%",transition:"width .3s"}}/>
+                              </div>
+                              {tCP&&<span style={{fontSize:8,color:D.blue,fontFamily:D.mono,whiteSpace:"nowrap"}}>{tCP}m✓</span>}
+                              {p.tsPreparando&&!tCP&&<span style={{fontSize:8,color:D.blue,fontFamily:D.mono}}>…</span>}
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
-                    <button onClick={()=>advance(p.id)} style={{width:"100%",padding:"8px",border:"none",cursor:"pointer",fontFamily:D.sans,background:`${st.color}14`,color:st.color,fontWeight:700,fontSize:10,borderTop:`1px solid ${st.color}22`,transition:"background .18s"}} onMouseEnter={e=>e.currentTarget.style.background=`${st.color}28`} onMouseLeave={e=>e.currentTarget.style.background=`${st.color}14`}>{estado==="pendiente"?"🔥 Iniciar":"✓ Listo"}</button>
                   </div>);})}
                 </div>);
               })}
@@ -800,15 +826,8 @@ function App(){
                   <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
                     <div style={{width:3,height:18,background:`linear-gradient(${D.amber},${D.green})`,borderRadius:2}}/>
                     <span style={{color:D.t0,fontWeight:600,fontSize:13}}>Tiempos por pedido</span>
-                    <span style={{color:D.t3,fontSize:10,fontFamily:D.mono,marginLeft:"auto"}}>últimos 20 pedidos cerrados</span>
+                    <span style={{color:D.t3,fontSize:10,fontFamily:D.mono,marginLeft:"auto"}}>últimos 20</span>
                   </div>
-                  {/* cabecera */}
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 80px 80px 80px 70px",gap:4,marginBottom:8,paddingBottom:8,borderBottom:`1px solid ${D.ln1}`}}>
-                    {["Mesa","Mozo","Cocinero","🤵→🔥","🔥 Prep","💳 Cobro","Total"].map(h=>(
-                      <div key={h} style={{fontSize:9,fontWeight:700,color:D.t2,fontFamily:D.sans,textTransform:"uppercase",letterSpacing:.5,textAlign:h==="Mesa"||h==="Mozo"||h==="Cocinero"?"left":"center"}}>{h}</div>
-                    ))}
-                  </div>
-                  {/* filas */}
                   {cerrados.map((p,i)=>{
                     const tMC=p.tsPreparando?p.tsPreparando-p.ts:null;
                     const tCP=p.tsListo&&p.tsPreparando?p.tsListo-p.tsPreparando:null;
@@ -818,31 +837,31 @@ function App(){
                     const alertaCP=tCP&&tCP>15*60000;
                     const alertaCB=tCB&&tCB>10*60000;
                     return(
-                      <div key={p.id} style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 80px 80px 80px 70px",gap:4,padding:"7px 0",borderBottom:`1px solid ${D.ln0}`,alignItems:"center",background:i%2===0?"transparent":D.bg4+"88",borderRadius:6}}>
-                        <div style={{fontFamily:D.serif,fontSize:12,fontWeight:600,color:D.t0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.mesa}</div>
-                        <div style={{fontSize:11,color:D.t1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.mozo||"—"}</div>
-                        <div style={{fontSize:11,color:D.t1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.cocinero||"—"}</div>
-                        <div style={{textAlign:"center"}}>
-                          <span style={{fontSize:11,fontWeight:600,color:alertaMC?D.red:D.amber,fontFamily:D.mono,background:`${alertaMC?D.red:D.amber}18`,padding:"1px 6px",borderRadius:8}}>{minsF(tMC)}</span>
+                      <div key={p.id} style={{padding:"10px 0",borderBottom:`1px solid ${D.ln0}`,background:i%2===0?"transparent":D.bg4+"66"}}>
+                        {/* fila 1: mesa + mozo + cocinero + total */}
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                          <div style={{display:"flex",alignItems:"center",gap:8,flex:1,minWidth:0}}>
+                            <span style={{fontFamily:D.serif,fontSize:13,fontWeight:600,color:D.t0,flexShrink:0}}>{p.mesa}</span>
+                            {p.mozo&&<span style={{fontSize:10,color:D.t2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>🤵 {p.mozo}</span>}
+                            {p.cocinero&&<span style={{fontSize:10,color:D.t2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flexShrink:0}}>👨‍🍳 {p.cocinero}</span>}
+                          </div>
+                          <span style={{fontSize:12,fontWeight:700,color:D.t0,fontFamily:D.mono,flexShrink:0,marginLeft:8}}>{minsF(tTotal)}</span>
                         </div>
-                        <div style={{textAlign:"center"}}>
-                          <span style={{fontSize:11,fontWeight:600,color:alertaCP?D.red:D.blue,fontFamily:D.mono,background:`${alertaCP?D.red:D.blue}18`,padding:"1px 6px",borderRadius:8}}>{minsF(tCP)}</span>
-                        </div>
-                        <div style={{textAlign:"center"}}>
-                          <span style={{fontSize:11,fontWeight:600,color:alertaCB?D.red:D.green,fontFamily:D.mono,background:`${alertaCB?D.red:D.green}18`,padding:"1px 6px",borderRadius:8}}>{minsF(tCB)}</span>
-                        </div>
-                        <div style={{textAlign:"center"}}>
-                          <span style={{fontSize:11,fontWeight:700,color:D.t0,fontFamily:D.mono}}>{minsF(tTotal)}</span>
+                        {/* fila 2: 3 chips de zona */}
+                        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                          <span style={{fontSize:10,fontWeight:600,color:alertaMC?D.red:D.amber,fontFamily:D.mono,background:`${alertaMC?D.red:D.amber}14`,padding:"2px 8px",borderRadius:20,border:`1px solid ${alertaMC?D.red:D.amber}33`}}>🤵→🔥 {minsF(tMC)}</span>
+                          <span style={{fontSize:10,fontWeight:600,color:alertaCP?D.red:D.blue,fontFamily:D.mono,background:`${alertaCP?D.red:D.blue}14`,padding:"2px 8px",borderRadius:20,border:`1px solid ${alertaCP?D.red:D.blue}33`}}>🔥 {minsF(tCP)}</span>
+                          <span style={{fontSize:10,fontWeight:600,color:alertaCB?D.red:D.green,fontFamily:D.mono,background:`${alertaCB?D.red:D.green}14`,padding:"2px 8px",borderRadius:20,border:`1px solid ${alertaCB?D.red:D.green}33`}}>💳 {minsF(tCB)}</span>
                         </div>
                       </div>
                     );
                   })}
                   {/* leyenda */}
-                  <div style={{display:"flex",gap:12,marginTop:10,flexWrap:"wrap"}}>
-                    {[{c:D.amber,l:"Obj. Mozo→Cocina: <5m"},{c:D.blue,l:"Obj. Preparación: <15m"},{c:D.green,l:"Obj. Cobro: <10m"}].map(x=>(
-                      <div key={x.l} style={{display:"flex",alignItems:"center",gap:4}}><span style={{width:8,height:8,borderRadius:"50%",background:x.c,display:"inline-block"}}/><span style={{fontSize:9,color:D.t2,fontFamily:D.sans}}>{x.l}</span></div>
+                  <div style={{display:"flex",gap:10,marginTop:12,flexWrap:"wrap"}}>
+                    {[{c:D.amber,l:"Mozo→Cocina <5m"},{c:D.blue,l:"Preparación <15m"},{c:D.green,l:"Cobro <10m"}].map(x=>(
+                      <div key={x.l} style={{display:"flex",alignItems:"center",gap:4}}><span style={{width:7,height:7,borderRadius:"50%",background:x.c,display:"inline-block"}}/><span style={{fontSize:9,color:D.t2}}>{x.l}</span></div>
                     ))}
-                    <span style={{fontSize:9,color:D.red,fontFamily:D.sans}}>• Rojo = objetivo superado</span>
+                    <span style={{fontSize:9,color:D.red}}>● rojo = objetivo superado</span>
                   </div>
                 </div>
               );
@@ -1010,12 +1029,12 @@ function App(){
       </div>
 
       {/* ═══ MODAL: ÍTEM ══ */}
-      {modM&&(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.50)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:300}} onClick={e=>{if(e.target===e.currentTarget)setModM(null);}}><div style={{background:"#FFFFFF",borderRadius:"22px 22px 0 0",padding:"26px 18px 42px",width:"100%",maxWidth:520,border:`1px solid ${D.ln1}`,boxShadow:"0 -8px 40px rgba(0,0,0,.14)",animation:"M-up .22s cubic-bezier(.22,.68,0,1.2)"}}><div style={{textAlign:"center",marginBottom:18}}><div style={{width:56,height:56,borderRadius:14,background:D.bg4,display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:30,marginBottom:8}}>{modM.plato.emoji}</div><div style={{fontFamily:D.serif,color:D.t0,fontSize:22,fontWeight:600}}>{modM.plato.nombre}</div><div style={{color:D.gc,fontWeight:700,fontSize:18,marginTop:4,fontFamily:D.mono,background:D.gd,display:"inline-block",padding:"2px 14px",borderRadius:20}}>{fmt(modM.plato.precio)}</div></div><div style={{color:D.t3,fontSize:9,letterSpacing:2,textTransform:"uppercase",marginBottom:10}}>Modificaciones</div><div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:16}}>{MODS.map(m=>{const on=selM.includes(m.id);return(<button key={m.id} onClick={()=>setSelM(p=>on?p.filter(x=>x!==m.id):[...p,m.id])} style={{padding:"7px 12px",borderRadius:20,cursor:"pointer",fontFamily:D.sans,border:`1px solid ${on?D.gb:D.ln1}`,background:on?D.gd:"#FFFFFF",color:on?D.gb:D.t2,fontWeight:600,fontSize:10,transition:"all .15s"}}>{m.icon} {m.label}</button>);})}</div><Inp label="Nota adicional" value={noteI} onChange={e=>setNoteI(e.target.value)} placeholder="Sin mariscos, alergia al ají..."/><div style={{display:"flex",gap:8,marginTop:4}}><Btn onClick={()=>setModM(null)} variant="ghost" style={{flex:1}}>Cancelar</Btn><Btn onClick={addItem} variant="gold" style={{flex:2}}>Agregar al pedido</Btn></div></div></div>)}
+      {modM&&(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.50)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:300}} onClick={e=>{if(e.target===e.currentTarget)setModM(null);}}><div style={{background:"#FFFFFF",borderRadius:"22px 22px 0 0",padding:"26px 18px 42px",width:"100%",maxWidth:520,border:`1px solid ${D.ln1}`,boxShadow:"0 -8px 40px rgba(0,0,0,.14)",animation:"M-up .22s cubic-bezier(.22,.68,0,1.2)"}}><div style={{textAlign:"center",marginBottom:18}}><div style={{width:56,height:56,borderRadius:14,background:D.bg4,display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:30,marginBottom:8}}>{modM.plato.emoji}</div><div style={{fontFamily:D.serif,color:D.t0,fontSize:22,fontWeight:600}}>{modM.plato.nombre}</div><div style={{color:D.gc,fontWeight:700,fontSize:18,marginTop:4,fontFamily:D.mono,background:D.gd,display:"inline-block",padding:"2px 14px",borderRadius:20}}>{fmt(modM.plato.precio)}</div></div><div style={{color:D.t3,fontSize:9,letterSpacing:2,textTransform:"uppercase",marginBottom:10}}>Modificaciones</div><div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:16}}>{MODS.filter(m=>modM.plato.esBebida?m.esBebida:!m.esBebida).map(m=>{const on=selM.includes(m.id);return(<button key={m.id} onClick={()=>setSelM(p=>on?p.filter(x=>x!==m.id):[...p,m.id])} style={{padding:"7px 12px",borderRadius:20,cursor:"pointer",fontFamily:D.sans,border:`1px solid ${on?D.gb:D.ln1}`,background:on?D.gd:"#FFFFFF",color:on?D.gb:D.t2,fontWeight:600,fontSize:10,transition:"all .15s"}}>{m.icon} {m.label}</button>);})}</div><Inp label="Nota adicional" value={noteI} onChange={e=>setNoteI(e.target.value)} placeholder="Sin mariscos, alergia al ají..."/><div style={{display:"flex",gap:8,marginTop:4}}><Btn onClick={()=>setModM(null)} variant="ghost" style={{flex:1}}>Cancelar</Btn><Btn onClick={addItem} variant="gold" style={{flex:2}}>Agregar al pedido</Btn></div></div></div>)}
 
       {/* ═══ MODAL: AGREGAR MÁS ══ */}
       {addToM&&(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.52)",display:"flex",flexDirection:"column",zIndex:300,overflowY:"auto"}}><div style={{background:"#FFFFFF",margin:"auto",borderRadius:18,padding:"22px 18px 32px",width:"100%",maxWidth:520,border:`1px solid ${D.ln1}`,boxShadow:"0 8px 40px rgba(0,0,0,.18)",animation:"M-in .2s ease"}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}><div><div style={{fontFamily:D.serif,fontSize:18,fontWeight:600,color:D.t0}}>Agregar más items</div><div style={{color:D.t2,fontSize:11,marginTop:2}}>Se crea un nuevo pedido adicional en cocina</div></div><button onClick={()=>{setAddToM(null);setAddCart([]);}} style={{width:32,height:32,borderRadius:8,border:`1px solid ${D.ln1}`,background:"#FFFFFF",color:D.t2,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14}}>×</button></div>{addCart.length>0&&(<div style={{background:D.bg4,borderRadius:12,padding:12,marginBottom:14,border:`1px solid ${D.ln1}`}}><div style={{color:D.gb,fontWeight:700,fontSize:12,marginBottom:8}}>A agregar ({addCart.length})</div>{addCart.map((it,i)=>(<div key={it.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:5}}><span style={{color:D.t1,fontSize:12}}>{it.plato.emoji} {it.plato.nombre}</span><div style={{display:"flex",gap:8,alignItems:"center"}}><span style={{color:D.gc,fontWeight:700,fontSize:12,fontFamily:D.mono}}>{fmt(it.precio)}</span><button onClick={()=>setAddCart(c=>c.filter((_,j)=>j!==i))} style={{background:"none",border:"none",color:D.red,cursor:"pointer",fontSize:15}}>×</button></div></div>))}<Btn onClick={confirmAddToOrder} variant="gold" full style={{marginTop:10,padding:"10px"}}>Confirmar y enviar a cocina</Btn></div>)}{Object.entries(menu).map(([cat,platos])=>(<div key={cat} style={{marginBottom:16}}><Divider label={cat}/><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(120px,1fr))",gap:8}}>{platos.filter(p=>!agotados[p.id]).map(plato=>(<button key={plato.id} onClick={()=>{setAddModM({plato});setAddSelM([]);setAddNoteI("");}} style={{background:"#FFFFFF",borderRadius:12,padding:"12px 8px",border:`1px solid ${D.ln1}`,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:4,transition:"all .18s",fontFamily:D.sans}} onMouseEnter={e=>{e.currentTarget.style.borderColor=D.gb;e.currentTarget.style.background=D.bg3;}} onMouseLeave={e=>{e.currentTarget.style.borderColor=D.ln1;e.currentTarget.style.background="#FFFFFF";}}><span style={{fontSize:22}}>{plato.emoji}</span><span style={{fontSize:10,fontWeight:500,color:D.t0,textAlign:"center",lineHeight:1.2}}>{plato.nombre}</span><span style={{fontSize:11,fontWeight:700,color:D.gc,fontFamily:D.mono}}>{fmt(plato.precio)}</span></button>))}</div></div>))}</div></div>)}
 
-      {addModM&&(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.55)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:400}} onClick={e=>{if(e.target===e.currentTarget)setAddModM(null);}}><div style={{background:"#FFFFFF",borderRadius:"22px 22px 0 0",padding:"24px 18px 40px",width:"100%",maxWidth:520,border:`1px solid ${D.ln1}`,animation:"M-up .22s cubic-bezier(.22,.68,0,1.2)"}}><div style={{textAlign:"center",marginBottom:16}}><div style={{fontSize:30,marginBottom:6}}>{addModM.plato.emoji}</div><div style={{fontFamily:D.serif,color:D.t0,fontSize:20,fontWeight:600}}>{addModM.plato.nombre}</div><div style={{color:D.gc,fontWeight:700,fontSize:16,marginTop:4,fontFamily:D.mono,background:D.gd,display:"inline-block",padding:"2px 14px",borderRadius:20}}>{fmt(addModM.plato.precio)}</div></div><div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:14}}>{MODS.map(m=>{const on=addSelM.includes(m.id);return(<button key={m.id} onClick={()=>setAddSelM(p=>on?p.filter(x=>x!==m.id):[...p,m.id])} style={{padding:"6px 11px",borderRadius:20,cursor:"pointer",fontFamily:D.sans,border:`1px solid ${on?D.gb:D.ln1}`,background:on?D.gd:"#FFFFFF",color:on?D.gb:D.t2,fontWeight:600,fontSize:10,transition:"all .15s"}}>{m.icon} {m.label}</button>);})}</div><Inp label="Nota" value={addNoteI} onChange={e=>setAddNoteI(e.target.value)} placeholder="Observaciones..."/><div style={{display:"flex",gap:8,marginTop:4}}><Btn onClick={()=>setAddModM(null)} variant="ghost" style={{flex:1}}>Cancelar</Btn><Btn onClick={addItemToOrder} variant="gold" style={{flex:2}}>Agregar</Btn></div></div></div>)}
+      {addModM&&(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.55)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:400}} onClick={e=>{if(e.target===e.currentTarget)setAddModM(null);}}><div style={{background:"#FFFFFF",borderRadius:"22px 22px 0 0",padding:"24px 18px 40px",width:"100%",maxWidth:520,border:`1px solid ${D.ln1}`,animation:"M-up .22s cubic-bezier(.22,.68,0,1.2)"}}><div style={{textAlign:"center",marginBottom:16}}><div style={{fontSize:30,marginBottom:6}}>{addModM.plato.emoji}</div><div style={{fontFamily:D.serif,color:D.t0,fontSize:20,fontWeight:600}}>{addModM.plato.nombre}</div><div style={{color:D.gc,fontWeight:700,fontSize:16,marginTop:4,fontFamily:D.mono,background:D.gd,display:"inline-block",padding:"2px 14px",borderRadius:20}}>{fmt(addModM.plato.precio)}</div></div><div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:14}}>{MODS.filter(m=>addModM.plato.esBebida?m.esBebida:!m.esBebida).map(m=>{const on=addSelM.includes(m.id);return(<button key={m.id} onClick={()=>setAddSelM(p=>on?p.filter(x=>x!==m.id):[...p,m.id])} style={{padding:"6px 11px",borderRadius:20,cursor:"pointer",fontFamily:D.sans,border:`1px solid ${on?D.gb:D.ln1}`,background:on?D.gd:"#FFFFFF",color:on?D.gb:D.t2,fontWeight:600,fontSize:10,transition:"all .15s"}}>{m.icon} {m.label}</button>);})}</div><Inp label="Nota" value={addNoteI} onChange={e=>setAddNoteI(e.target.value)} placeholder="Observaciones..."/><div style={{display:"flex",gap:8,marginTop:4}}><Btn onClick={()=>setAddModM(null)} variant="ghost" style={{flex:1}}>Cancelar</Btn><Btn onClick={addItemToOrder} variant="gold" style={{flex:2}}>Agregar</Btn></div></div></div>)}
 
 
       {/* ═══ MODAL: COBRAR ══ */}
