@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -550,6 +549,19 @@ function App(){
                             {p.tsPreparando&&<ZoneTimer startTs={p.tsPreparando} endTs={p.tsListo} color={D.blue} label="🔥"/>}
                             {p.tsListo&&<ZoneTimer startTs={p.tsListo} endTs={p.tsCobrado} color={D.green} label="💳"/>}
                           </div>
+                          {/* Resumen total si ya está cerrado */}
+                          {p.cerrado&&p.tsCobrado&&(
+                            <div style={{marginTop:8,display:"inline-flex",alignItems:"center",gap:6,background:D.greenD,border:`1px solid ${D.green}33`,borderRadius:20,padding:"3px 12px"}}>
+                              <span style={{fontSize:10}}>⏱</span>
+                              <span style={{fontSize:11,color:D.green,fontWeight:700,fontFamily:D.mono}}>Total en mesa: {((p.tsCobrado-p.ts)/60000).toFixed(1)} min</span>
+                            </div>
+                          )}
+                          {p.tsListo&&!p.cerrado&&(
+                            <div style={{marginTop:8,display:"inline-flex",alignItems:"center",gap:6,background:D.blueD,border:`1px solid ${D.blue}33`,borderRadius:20,padding:"3px 12px"}}>
+                              <span style={{fontSize:10}}>⏱</span>
+                              <span style={{fontSize:11,color:D.blue,fontWeight:700,fontFamily:D.mono}}>Cocina completada en {((p.tsListo-p.ts)/60000).toFixed(1)} min</span>
+                            </div>
+                          )}
                           {esVoid&&p.motivoAnulacion&&<div style={{fontSize:11,color:D.red,marginTop:6,fontStyle:"italic"}}>Motivo: {p.motivoAnulacion}</div>}
                         </div>
                         <div style={{textAlign:"right"}}><div style={{color:D.gc,fontWeight:800,fontSize:22,fontFamily:D.serif}}>{fmt(t.totalConDesc)}</div>{t.descBCP>0&&<div style={{color:D.blue,fontSize:11,marginTop:2}}>-{fmt(t.descBCP)} BCP</div>}<div style={{color:D.t3,fontSize:10,marginTop:2}}>{p.items.length} items</div></div>
@@ -614,7 +626,39 @@ function App(){
                       {p.items.slice(0,3).map(it=>(<div key={it.id} style={{display:"flex",alignItems:"center",gap:5,marginBottom:3}}><span style={{fontSize:12}}>{it.plato.emoji}</span><span style={{color:D.t1,fontSize:11,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{it.plato.nombre}</span>{it.mods?.length>0&&<span style={{color:D.ca,fontSize:9,fontFamily:D.mono}}>+{it.mods.length}</span>}</div>))}
                       {n>3&&<div style={{color:D.t3,fontSize:9,marginTop:2,fontFamily:D.mono}}>+{n-3} más</div>}
                       {p.notas?.length>0&&<div style={{color:D.purple,fontSize:9,marginTop:4,fontFamily:D.mono}}>📌 {p.notas.length} nota{p.notas.length>1?"s":""}</div>}
-                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:8,paddingTop:7,borderTop:`1px solid ${D.ln0}`}}><span style={{color:D.t3,fontSize:9,fontFamily:D.mono}}>{n} item{n>1?"s":""}</span><div style={{textAlign:"right"}}><span style={{color:D.gc,fontWeight:700,fontSize:13,fontFamily:D.serif}}>{fmt(totalConDesc)}</span>{descBCP>0&&<div style={{color:D.blue,fontSize:9}}>-{fmt(descBCP)} BCP</div>}</div></div>
+                      {/* Mini barra de zonas */}
+                      {!esVoid&&(()=>{
+                        const tMC=p.tsPreparando?((p.tsPreparando-p.ts)/60000).toFixed(1):null;
+                        const tCP=p.tsListo&&p.tsPreparando?((p.tsListo-p.tsPreparando)/60000).toFixed(1):null;
+                        const tCB=p.tsCobrado&&p.tsListo?((p.tsCobrado-p.tsListo)/60000).toFixed(1):null;
+                        const zones=[
+                          {label:"🤵",val:tMC,done:!!p.tsPreparando,active:p.estado==="pendiente",color:D.amber},
+                          {label:"🔥",val:tCP,done:!!p.tsListo,active:p.estado==="preparando",color:D.blue},
+                          {label:"💳",val:tCB,done:!!p.tsCobrado,active:p.estado==="listo",color:D.green},
+                        ];
+                        return(
+                          <div style={{marginTop:8,paddingTop:7,borderTop:`1px solid ${D.ln0}`}}>
+                            <div style={{display:"flex",gap:3,alignItems:"center"}}>
+                              {zones.map((z,i)=>(
+                                <React.Fragment key={z.label}>
+                                  <div style={{display:"flex",alignItems:"center",gap:3,flex:z.done||z.active?1:0,minWidth:z.done||z.active?0:20}}>
+                                    <span style={{fontSize:9,opacity:z.done||z.active?1:.3}}>{z.label}</span>
+                                    {(z.done||z.active)&&(
+                                      <div style={{flex:1,height:3,borderRadius:10,background:D.bg4,overflow:"hidden",minWidth:20}}>
+                                        <div style={{height:"100%",borderRadius:10,background:z.color,width:z.done?"100%":"60%",opacity:z.active?1:.6,animation:z.active?"none":"none",transition:"width .3s"}}/>
+                                      </div>
+                                    )}
+                                    {z.val&&<span style={{fontSize:8,color:z.color,fontFamily:D.mono,whiteSpace:"nowrap"}}>{z.val}m</span>}
+                                    {z.active&&!z.val&&<span style={{fontSize:8,color:z.color,fontFamily:D.mono}}>…</span>}
+                                  </div>
+                                  {i<2&&<span style={{color:D.t3,fontSize:8,flexShrink:0}}>›</span>}
+                                </React.Fragment>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })()}
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:6}}><span style={{color:D.t3,fontSize:9,fontFamily:D.mono}}>{n} item{n>1?"s":""}</span><div style={{textAlign:"right"}}><span style={{color:D.gc,fontWeight:700,fontSize:13,fontFamily:D.serif}}>{fmt(totalConDesc)}</span>{descBCP>0&&<div style={{color:D.blue,fontSize:9}}>-{fmt(descBCP)} BCP</div>}</div></div>
                     </div>
                     {!esVoid&&ESTADOS[p.estado]?.next&&<button onClick={e=>{e.stopPropagation();advance(p.id);}} style={{width:"100%",padding:"7px",border:"none",cursor:"pointer",fontFamily:D.sans,background:`${st.color}12`,color:st.color,fontWeight:600,fontSize:10,borderTop:`1px solid ${st.color}22`,transition:"background .18s"}} onMouseEnter={e=>e.currentTarget.style.background=`${st.color}24`} onMouseLeave={e=>e.currentTarget.style.background=`${st.color}12`}>→ {ESTADOS[ESTADOS[p.estado].next].label}</button>}
                     {!esVoid&&rol==="waiter"&&p.estado==="listo"&&<button onClick={e=>{e.stopPropagation();setCobroM(p.id);}} style={{width:"100%",padding:"7px",border:"none",cursor:"pointer",fontFamily:D.sans,background:D.gd,color:D.gb,fontWeight:600,fontSize:10,borderTop:`1px solid ${D.gb}22`,transition:"background .18s"}} onMouseEnter={e=>e.currentTarget.style.background=`${D.ga}22`} onMouseLeave={e=>e.currentTarget.style.background=D.gd}>🧾 Cobrar</button>}
@@ -745,6 +789,64 @@ function App(){
                 {turnos.filter(t=>t.fin).slice(0,5).map(t=>(<div key={t.id} style={{marginBottom:10,paddingBottom:10,borderBottom:`1px solid ${D.ln0}`}}><div style={{display:"flex",justifyContent:"space-between"}}><div><div style={{color:D.t0,fontWeight:600,fontSize:12}}>{t.empleado}</div><div style={{color:D.t3,fontSize:10,fontFamily:D.mono}}>{tsD(t.inicio)} · {tsH(t.inicio)} → {tsH(t.fin)}</div></div><div style={{textAlign:"right"}}><div style={{color:D.gc,fontWeight:700,fontSize:13,fontFamily:D.serif}}>{fmt(t.ventaTotal)}</div><div style={{color:D.t3,fontSize:9}}>{t.nPedidos} pedidos</div></div></div>{t.notas&&<div style={{color:D.t2,fontSize:11,marginTop:4,fontStyle:"italic"}}>"{t.notas}"</div>}</div>))}
               </div>}
             </div>
+
+            {/* ── TABLA DE TIEMPOS POR PEDIDO ── */}
+            {(()=>{
+              const cerrados=pedidos.filter(p=>p.cerrado&&!p.eAdicional).slice(0,20);
+              if(!cerrados.length) return null;
+              const minsF=ms=>ms!=null?(ms/60000).toFixed(1)+"m":"—";
+              return(
+                <div style={{marginTop:14,background:"#FFFFFF",borderRadius:16,padding:18,border:`1px solid ${D.ln1}`,boxShadow:"0 1px 4px rgba(0,0,0,.06)"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
+                    <div style={{width:3,height:18,background:`linear-gradient(${D.amber},${D.green})`,borderRadius:2}}/>
+                    <span style={{color:D.t0,fontWeight:600,fontSize:13}}>Tiempos por pedido</span>
+                    <span style={{color:D.t3,fontSize:10,fontFamily:D.mono,marginLeft:"auto"}}>últimos 20 pedidos cerrados</span>
+                  </div>
+                  {/* cabecera */}
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 80px 80px 80px 70px",gap:4,marginBottom:8,paddingBottom:8,borderBottom:`1px solid ${D.ln1}`}}>
+                    {["Mesa","Mozo","Cocinero","🤵→🔥","🔥 Prep","💳 Cobro","Total"].map(h=>(
+                      <div key={h} style={{fontSize:9,fontWeight:700,color:D.t2,fontFamily:D.sans,textTransform:"uppercase",letterSpacing:.5,textAlign:h==="Mesa"||h==="Mozo"||h==="Cocinero"?"left":"center"}}>{h}</div>
+                    ))}
+                  </div>
+                  {/* filas */}
+                  {cerrados.map((p,i)=>{
+                    const tMC=p.tsPreparando?p.tsPreparando-p.ts:null;
+                    const tCP=p.tsListo&&p.tsPreparando?p.tsListo-p.tsPreparando:null;
+                    const tCB=p.tsCobrado&&p.tsListo?p.tsCobrado-p.tsListo:null;
+                    const tTotal=p.tsCobrado?p.tsCobrado-p.ts:null;
+                    const alertaMC=tMC&&tMC>5*60000;
+                    const alertaCP=tCP&&tCP>15*60000;
+                    const alertaCB=tCB&&tCB>10*60000;
+                    return(
+                      <div key={p.id} style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 80px 80px 80px 70px",gap:4,padding:"7px 0",borderBottom:`1px solid ${D.ln0}`,alignItems:"center",background:i%2===0?"transparent":D.bg4+"88",borderRadius:6}}>
+                        <div style={{fontFamily:D.serif,fontSize:12,fontWeight:600,color:D.t0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.mesa}</div>
+                        <div style={{fontSize:11,color:D.t1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.mozo||"—"}</div>
+                        <div style={{fontSize:11,color:D.t1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.cocinero||"—"}</div>
+                        <div style={{textAlign:"center"}}>
+                          <span style={{fontSize:11,fontWeight:600,color:alertaMC?D.red:D.amber,fontFamily:D.mono,background:`${alertaMC?D.red:D.amber}18`,padding:"1px 6px",borderRadius:8}}>{minsF(tMC)}</span>
+                        </div>
+                        <div style={{textAlign:"center"}}>
+                          <span style={{fontSize:11,fontWeight:600,color:alertaCP?D.red:D.blue,fontFamily:D.mono,background:`${alertaCP?D.red:D.blue}18`,padding:"1px 6px",borderRadius:8}}>{minsF(tCP)}</span>
+                        </div>
+                        <div style={{textAlign:"center"}}>
+                          <span style={{fontSize:11,fontWeight:600,color:alertaCB?D.red:D.green,fontFamily:D.mono,background:`${alertaCB?D.red:D.green}18`,padding:"1px 6px",borderRadius:8}}>{minsF(tCB)}</span>
+                        </div>
+                        <div style={{textAlign:"center"}}>
+                          <span style={{fontSize:11,fontWeight:700,color:D.t0,fontFamily:D.mono}}>{minsF(tTotal)}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {/* leyenda */}
+                  <div style={{display:"flex",gap:12,marginTop:10,flexWrap:"wrap"}}>
+                    {[{c:D.amber,l:"Obj. Mozo→Cocina: <5m"},{c:D.blue,l:"Obj. Preparación: <15m"},{c:D.green,l:"Obj. Cobro: <10m"}].map(x=>(
+                      <div key={x.l} style={{display:"flex",alignItems:"center",gap:4}}><span style={{width:8,height:8,borderRadius:"50%",background:x.c,display:"inline-block"}}/><span style={{fontSize:9,color:D.t2,fontFamily:D.sans}}>{x.l}</span></div>
+                    ))}
+                    <span style={{fontSize:9,color:D.red,fontFamily:D.sans}}>• Rojo = objetivo superado</span>
+                  </div>
+                </div>
+              );
+            })()}
             {/* Limpiar datos */}
             <div style={{marginTop:18,background:"#FFFFFF",borderRadius:14,padding:16,border:`1px solid ${D.red}33`,boxShadow:"0 1px 4px rgba(0,0,0,.06)"}}>
               <div style={{color:D.red,fontWeight:700,fontSize:13,marginBottom:8}}>⚠️ Zona de administración</div>
