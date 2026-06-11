@@ -43,12 +43,18 @@ const{useState,useEffect,useRef,useMemo,useCallback}=React;
 const D={canvas:"#F0EDE6",bg3:"#EDE9E1",bg4:"#F5F2EC",ln0:"#00000008",ln1:"#0000001A",ln2:"#00000028",nb1:"#0A1F38",nb2:"#174A82",nb3:"#1E5490",ga:"#8A6820",gb:"#C9A84C",gc:"#E2C97E",gd:"#C9A84C18",ca:"#0369A1",cb:"#E0F2FE",amber:"#D97706",amberD:"#D9770612",blue:"#2563EB",blueD:"#2563EB12",green:"#059669",greenD:"#05966912",red:"#DC2626",redD:"#DC262612",purple:"#7C3AED",purpleD:"#7C3AED12",t0:"#1A1824",t1:"#4A4560",t2:"#8A879E",t3:"#C4C1D2",serif:"'Cormorant Garamond',Georgia,serif",sans:"'DM Sans','Helvetica Neue',sans-serif",display:"'Syne','DM Sans',sans-serif",mono:"'JetBrains Mono','Courier New',monospace"};
 
 const MENU_DEFAULT={
-  "Ceviches":[{id:"cv1",nombre:"Ceviche Clásico",emoji:"🐟",precio:38},{id:"cv2",nombre:"Ceviche Mixto",emoji:"🦐",precio:45},{id:"cv3",nombre:"Conchas Negras",emoji:"🐚",precio:52},{id:"cv4",nombre:"Tiradito de Lenguado",emoji:"🐠",precio:42},{id:"cv5",nombre:"Leche de Tigre",emoji:"🥛",precio:22}],
-  "Arroces & Fondos":[{id:"ar1",nombre:"Arroz con Mariscos",emoji:"🦞",precio:48},{id:"ar2",nombre:"Chaufa de Mariscos",emoji:"🍳",precio:42},{id:"ar3",nombre:"Sudado de Pescado",emoji:"🍲",precio:44},{id:"ar4",nombre:"Parihuela",emoji:"🥘",precio:55}],
-  "Entradas":[{id:"en1",nombre:"Causa Rellena",emoji:"🥗",precio:28},{id:"en2",nombre:"Pulpo al Olivo",emoji:"🐙",precio:48},{id:"en3",nombre:"Choros a la Chalaca",emoji:"🦪",precio:32}],
-  "Bebidas":[{id:"be1",nombre:"Chicha Morada",emoji:"🫙",precio:12,esBebida:true},{id:"be2",nombre:"Maracuyá Frozen",emoji:"🍹",precio:15,esBebida:true},{id:"be3",nombre:"Agua Mineral",emoji:"💧",precio:8,esBebida:true},{id:"be4",nombre:"Cerveza",emoji:"🍺",precio:14,esBebida:true},{id:"be5",nombre:"Pisco Sour",emoji:"🍸",precio:22,esBebida:true}],
+  "Ceviches":[{id:"cv1",nombre:"Ceviche Clásico",emoji:"🐟",precio:38,estacion:"frio"},{id:"cv2",nombre:"Ceviche Mixto",emoji:"🦐",precio:45,estacion:"frio"},{id:"cv3",nombre:"Conchas Negras",emoji:"🐚",precio:52,estacion:"frio"},{id:"cv4",nombre:"Tiradito de Lenguado",emoji:"🐠",precio:42,estacion:"frio"},{id:"cv5",nombre:"Leche de Tigre",emoji:"🥛",precio:22,estacion:"frio"}],
+  "Arroces & Fondos":[{id:"ar1",nombre:"Arroz con Mariscos",emoji:"🦞",precio:48,estacion:"caliente"},{id:"ar2",nombre:"Chaufa de Mariscos",emoji:"🍳",precio:42,estacion:"caliente"},{id:"ar3",nombre:"Sudado de Pescado",emoji:"🍲",precio:44,estacion:"caliente"},{id:"ar4",nombre:"Parihuela",emoji:"🥘",precio:55,estacion:"caliente"}],
+  "Entradas":[{id:"en1",nombre:"Causa Rellena",emoji:"🥗",precio:28,estacion:"frio"},{id:"en2",nombre:"Pulpo al Olivo",emoji:"🐙",precio:48,estacion:"frio"},{id:"en3",nombre:"Choros a la Chalaca",emoji:"🦪",precio:32,estacion:"frio"}],
+  "Bebidas":[{id:"be1",nombre:"Chicha Morada",emoji:"🫙",precio:12,esBebida:true,estacion:"bebida"},{id:"be2",nombre:"Maracuyá Frozen",emoji:"🍹",precio:15,esBebida:true,estacion:"bebida"},{id:"be3",nombre:"Agua Mineral",emoji:"💧",precio:8,esBebida:true,estacion:"bebida"},{id:"be4",nombre:"Cerveza",emoji:"🍺",precio:14,esBebida:true,estacion:"bebida"},{id:"be5",nombre:"Pisco Sour",emoji:"🍸",precio:22,esBebida:true,estacion:"bebida"}],
 };
 const AGOTADOS_DEFAULT={};
+const ESTACIONES={
+  frio:    {label:"Frío",     icon:"❄️", color:"#0EA5E9", dim:"#0EA5E912", bg:"#F0F9FF"},
+  caliente:{label:"Caliente", icon:"🔥", color:"#EA580C", dim:"#EA580C12", bg:"#FFF7ED"},
+  bebida:  {label:"Bebidas",  icon:"🍹", color:"#7C3AED", dim:"#7C3AED12", bg:"#FAF5FF"},
+};
+const getEstacion=plato=>plato?.estacion||(plato?.esBebida?"bebida":"frio");
 const MODS=[{id:"sp",label:"Sin picante",icon:"🌶️",esBebida:false},{id:"xl",label:"Extra limón",icon:"🍋",esBebida:false},{id:"sc",label:"Sin cebolla",icon:"🧅",esBebida:false},{id:"sf",label:"Sin cilantro",icon:"🌿",esBebida:false},{id:"ps",label:"Poco sal",icon:"🧂",esBebida:false},{id:"et",label:"Extra leche tigre",icon:"🥛",esBebida:false},{id:"sa",label:"Sin ají amarillo",icon:"🫑",esBebida:false},{id:"pk",label:"Para llevar",icon:"📦",esBebida:true},{id:"sg",label:"Sin mariscos",icon:"🚫",esBebida:false},{id:"al",label:"Alergia mariscos",icon:"⚠️",esBebida:false},{id:"ss",label:"Sin hielo",icon:"🧊",esBebida:true},{id:"sl",label:"Sin azúcar",icon:"🍬",esBebida:true},{id:"xf",label:"Extra frío",icon:"❄️",esBebida:true},{id:"sp2",label:"Sin gas",icon:"💧",esBebida:true}];
 const MESAS=["1","2","3","4","5","6","7","8","9","10","Barra","Delivery"];
 const EMPLEADOS_DEFAULT={mozos:["Carlos","Miguel","Lucia","Sofia","Diego"],cocina:["Chef Mario","Ana","Roberto","Patricia","Luis"]};
@@ -394,6 +400,7 @@ function App(){
   const savePrecio=async(cat,idx,val)=>{const n=parseFloat(val);if(isNaN(n)||n<=0)return;await window.DB.saveConfig("menu",{...menu,[cat]:menu[cat].map((p,i)=>i===idx?{...p,precio:n}:p)});setEditP({});};
   const saveEmpleados=async em=>{await window.DB.saveConfig("empleados",em);setEmpleados(em);};
   const toggleAgotado=async id=>{const a={...agotados,[id]:!agotados[id]};if(!a[id])delete a[id];await window.DB.saveConfig("agotados",a);setAgotados(a);};
+  const saveEstacion=async(cat,idx,est)=>{const newMenu={...menu,[cat]:menu[cat].map((p,i)=>i===idx?{...p,estacion:est}:p)};await window.DB.saveConfig("menu",newMenu);};
   const deleteAll=async()=>{await window.DB.deleteAllPedidos();await window.DB.deleteAllComps();setConfirmDelete(false);};
 
   /* ── Turno ── */
@@ -429,6 +436,17 @@ function App(){
       avgZonaCocina:avgArr(cerradosTodos.filter(p=>p.tsListo&&p.tsPreparando).map(p=>(p.tsListo-p.tsPreparando)/60000)),
       avgZonaCobro:avgArr(cerradosTodos.filter(p=>p.tsCobrado&&p.tsListo).map(p=>(p.tsCobrado-p.tsListo)/60000)),
       proyVenta,
+      estacionStats:(()=>{
+        const st={frio:{n:0,rev:0,top:{}},caliente:{n:0,rev:0,top:{}},bebida:{n:0,rev:0,top:{}}};
+        pedidos.forEach(p=>p.items.forEach(it=>{
+          const e=getEstacion(it.plato);if(!st[e])return;
+          st[e].n++;st[e].rev+=it.precio;
+          if(!st[e].top[it.plato.nombre])st[e].top[it.plato.nombre]={nombre:it.plato.nombre,emoji:it.plato.emoji,n:0};
+          st[e].top[it.plato.nombre].n++;
+        }));
+        Object.keys(st).forEach(k=>{st[k].topList=Object.values(st[k].top).sort((a,b)=>b.n-a.n).slice(0,3);});
+        return st;
+      })(),
     };
   },[pedidos,comps]);
 
@@ -729,7 +747,29 @@ function App(){
         {/* ═══ COCINA ══ */}
         {vista==="kitchen"&&(
           <div style={{paddingTop:14}}>
-            <div style={{background:"#FFFFFF",borderRadius:14,padding:"12px 16px",marginBottom:14,border:`1px solid ${D.ln1}`,boxShadow:"0 1px 4px rgba(0,0,0,.06)"}}><div style={{fontFamily:D.serif,fontSize:17,fontWeight:600,color:D.t0}}>Estación de Cocina</div><div style={{color:D.t2,fontSize:11,marginTop:2}}>{new Date().toLocaleDateString("es-PE",{weekday:"long",day:"2-digit",month:"long"})}</div></div>
+            <div style={{background:"#FFFFFF",borderRadius:14,padding:"12px 16px",marginBottom:10,border:`1px solid ${D.ln1}`,boxShadow:"0 1px 4px rgba(0,0,0,.06)"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+                <div><div style={{fontFamily:D.serif,fontSize:17,fontWeight:600,color:D.t0}}>Estación de Cocina</div><div style={{color:D.t2,fontSize:11,marginTop:2}}>{new Date().toLocaleDateString("es-PE",{weekday:"long",day:"2-digit",month:"long"})}</div></div>
+              </div>
+              {/* Mini KPI estaciones */}
+              {(()=>{
+                const items=vivos.flatMap(p=>p.items);
+                const nF=items.filter(i=>getEstacion(i.plato)==="frio").length;
+                const nC=items.filter(i=>getEstacion(i.plato)==="caliente").length;
+                const nB=items.filter(i=>getEstacion(i.plato)==="bebida").length;
+                if(!items.length)return null;
+                return(<div style={{display:"flex",gap:8,marginTop:10}}>
+                  {[{k:"frio",n:nF},{k:"caliente",n:nC},{k:"bebida",n:nB}].map(({k,n})=>{
+                    const cfg=ESTACIONES[k];
+                    return(<div key={k} style={{display:"flex",alignItems:"center",gap:5,background:cfg.bg,border:`1px solid ${cfg.color}33`,borderRadius:20,padding:"3px 10px"}}>
+                      <span style={{fontSize:11}}>{cfg.icon}</span>
+                      <span style={{fontFamily:D.mono,fontSize:11,fontWeight:700,color:cfg.color}}>{n}</span>
+                      <span style={{fontSize:9,color:D.t2}}>{cfg.label}</span>
+                    </div>);
+                  })}
+                </div>);
+              })()}
+            </div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
               {["pendiente","preparando"].map(estado=>{
                 const st=ESTADOS[estado];const lista=vivos.filter(p=>p.estado===estado);
@@ -745,7 +785,13 @@ function App(){
                   {lista.length===0&&fantasmas.length===0&&<div style={{background:"#FFFFFF",borderRadius:12,padding:"18px",border:`1px solid ${D.ln0}`,textAlign:"center",color:D.t3,fontSize:12}}>Sin pedidos</div>}
                   {lista.map(p=>{const urgente=estado==="pendiente"&&(Date.now()-p.ts)>15*60000;return(<div key={p.id} style={{background:"#FFFFFF",borderRadius:12,overflow:"hidden",marginBottom:9,border:urgente?`1.5px solid ${D.red}55`:`1px solid ${st.color}44`,boxShadow:"0 2px 8px rgba(0,0,0,.06)"}}>
                     <div style={{padding:"7px 12px",background:`${st.color}0C`,borderBottom:`1px solid ${D.ln0}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                      <div><span style={{fontFamily:D.serif,fontSize:15,fontWeight:600,color:D.t0}}>{p.mesa}</span>{p.mozo&&<span style={{fontSize:10,color:D.t2,marginLeft:6}}>· {p.mozo}</span>}{p.eAdicional&&<span style={{fontSize:9,color:D.purple,fontFamily:D.mono,marginLeft:6}}>+ADD</span>}</div>
+                      <div><span style={{fontFamily:D.serif,fontSize:15,fontWeight:600,color:D.t0}}>{p.mesa}</span>{p.mozo&&<span style={{fontSize:10,color:D.t2,marginLeft:6}}>· {p.mozo}</span>}{p.eAdicional&&<span style={{fontSize:9,color:D.purple,fontFamily:D.mono,marginLeft:6}}>+ADD</span>}
+                        {/* Estacion badges por item */}
+                        {(()=>{
+                          const ests=[...new Set(p.items.map(i=>getEstacion(i.plato)))];
+                          return ests.map(e=>{const cfg=ESTACIONES[e];return cfg?(<span key={e} style={{fontSize:9,marginLeft:5,background:cfg.bg,color:cfg.color,border:`1px solid ${cfg.color}33`,borderRadius:10,padding:"1px 6px",fontFamily:D.sans}}>{cfg.icon}</span>):null;});
+                        })()}
+                      </div>
                       {estado==="pendiente"&&<ZoneTimer startTs={p.ts} endTs={p.tsPreparando} color={urgente?D.red:D.amber} label=""/>}
                       {estado==="preparando"&&<ZoneTimer startTs={p.tsPreparando||p.ts} endTs={p.tsListo} color={D.blue} label=""/>}
                     </div>
@@ -803,7 +849,7 @@ function App(){
                   })}
                 </div>);
               })}
-              
+              })}
             </div>
             {vivos.filter(p=>p.estado==="listo").length>0&&(
               <div style={{marginTop:16}}>
@@ -862,6 +908,54 @@ function App(){
                 ))}
               </div>
             </div>
+
+            {/* ── KPI FRÍO vs CALIENTE vs BEBIDAS ── */}
+            {(()=>{
+              const st=kpi.estacionStats;if(!st)return null;
+              const total=st.frio.n+st.caliente.n+st.bebida.n;if(!total)return null;
+              return(
+                <div style={{background:"#FFFFFF",borderRadius:16,padding:16,border:`1px solid ${D.ln1}`,boxShadow:"0 1px 4px rgba(0,0,0,.06)",marginBottom:14}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
+                    <div style={{width:3,height:18,background:"linear-gradient(#0EA5E9,#EA580C)",borderRadius:2}}/>
+                    <span style={{color:D.t0,fontWeight:600,fontSize:13}}>Estaciones — Frío vs Caliente</span>
+                    <span style={{color:D.t3,fontSize:10,fontFamily:D.mono,marginLeft:"auto"}}>{total} platos totales</span>
+                  </div>
+                  {/* Barra de proporción */}
+                  <div style={{height:10,borderRadius:10,overflow:"hidden",display:"flex",marginBottom:14}}>
+                    {[["frio","#0EA5E9"],["caliente","#EA580C"],["bebida","#7C3AED"]].map(([k,c])=>(
+                      <div key={k} style={{width:`${(st[k].n/total)*100}%`,background:c,transition:"width .6s ease",minWidth:st[k].n>0?4:0}}/>
+                    ))}
+                  </div>
+                  {/* Cards por estación */}
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10}}>
+                    {Object.entries(ESTACIONES).map(([key,cfg])=>{
+                      const s=st[key];const pct=total?Math.round((s.n/total)*100):0;
+                      return(
+                        <div key={key} style={{background:cfg.bg,borderRadius:12,padding:"10px 12px",border:`1px solid ${cfg.color}33`}}>
+                          <div style={{fontSize:16,marginBottom:4}}>{cfg.icon}</div>
+                          <div style={{fontFamily:D.display,fontSize:20,fontWeight:700,color:cfg.color,lineHeight:1}}>{pct}%</div>
+                          <div style={{color:D.t1,fontSize:10,fontWeight:600,marginTop:2}}>{cfg.label}</div>
+                          <div style={{color:D.t3,fontSize:9,marginTop:1,fontFamily:D.mono}}>{s.n}× · {fmt(s.rev)}</div>
+                          {/* Top 3 */}
+                          {s.topList?.length>0&&(
+                            <div style={{marginTop:8,paddingTop:8,borderTop:`1px solid ${cfg.color}22`}}>
+                              {s.topList.map((p,i)=>(
+                                <div key={p.nombre} style={{display:"flex",alignItems:"center",gap:4,marginBottom:3}}>
+                                  <span style={{fontSize:9,color:cfg.color,fontFamily:D.mono,minWidth:10}}>#{i+1}</span>
+                                  <span style={{fontSize:10}}>{p.emoji}</span>
+                                  <span style={{fontSize:9,color:D.t1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.nombre}</span>
+                                  <span style={{fontSize:9,color:cfg.color,fontFamily:D.mono,marginLeft:"auto",flexShrink:0}}>{p.n}×</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
 
             <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))",gap:14}}>
               {/* Top platos */}
@@ -1073,7 +1167,16 @@ function App(){
                   <div key={plato.id} style={{background:"#FFFFFF",borderRadius:11,padding:"10px 13px",marginBottom:6,display:"flex",alignItems:"center",gap:10,border:`1px solid ${agotados[plato.id]?D.red+"33":D.ln0}`,boxShadow:"0 1px 2px rgba(0,0,0,.04)",opacity:agotados[plato.id]?.6:1}}>
                     <span style={{fontSize:18}}>{plato.emoji}</span>
                     <span style={{flex:1,color:D.t0,fontSize:12}}>{plato.nombre}</span>
-                    {plato.esBebida&&<span style={{fontSize:9,color:D.blue,background:D.cb,padding:"2px 7px",borderRadius:10}}>Bebida</span>}
+                    {/* Estacion toggle — 3 botones */}
+                    {!plato.esBebida&&(
+                      <div style={{display:"flex",gap:3}}>
+                        {["frio","caliente"].map(e=>{
+                          const cfg=ESTACIONES[e];const active=getEstacion(plato)===e;
+                          return(<button key={e} onClick={()=>saveEstacion(cat,idx,e)} style={{padding:"2px 7px",borderRadius:8,border:`1px solid ${active?cfg.color+"44":D.ln1}`,background:active?cfg.bg:"#FFFFFF",color:active?cfg.color:D.t3,fontSize:11,cursor:"pointer",transition:"all .15s"}}>{cfg.icon}</button>);
+                        })}
+                      </div>
+                    )}
+                    {plato.esBebida&&<span style={{fontSize:9,color:ESTACIONES.bebida.color,background:ESTACIONES.bebida.bg,padding:"2px 7px",borderRadius:10}}>🍹 Bebida</span>}
                     {/* Toggle agotado */}
                     <button onClick={()=>toggleAgotado(plato.id)} style={{padding:"3px 9px",borderRadius:8,border:`1px solid ${agotados[plato.id]?D.red+"44":D.ln1}`,background:agotados[plato.id]?D.redD:"#FFFFFF",color:agotados[plato.id]?D.red:D.t2,fontSize:10,fontWeight:600,cursor:"pointer",fontFamily:D.sans,transition:"all .15s"}}>{agotados[plato.id]?"✓ Agotado":"Agotado"}</button>
                     {editP[plato.id]!==undefined?(
